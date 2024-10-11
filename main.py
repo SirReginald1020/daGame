@@ -154,9 +154,11 @@ if __name__ == '__main__':
     pygame.init()
 
     # Set up display
-    screen_width, screen_height = 800, 600
+    screenInfo = pygame.display.Info()
+    screen_width = screenInfo.current_w
+    screen_height = screenInfo.current_h - 55
     screen = pygame.display.set_mode((screen_width, screen_height))
-    pygame.display.set_caption("Platformer")
+    pygame.display.set_caption("daGame")
 
     # Define gradient colors (top and bottom)
     color_top = (186, 223, 255)  # Lighter blue (top)
@@ -179,9 +181,10 @@ if __name__ == '__main__':
     platforms.add(Platform(400, 400, 200, 20))
     platforms.add(Platform(250, 300, 200, 30))
     # box
-    platforms.add(Platform(0, 590, 800, 10))
-    platforms.add(Platform(0, 0, 800, 10))
-    platforms.add(Platform(0, 0, 10, 600))
+    platforms.add(Platform(0, screen_height - 10, screen_width, 10))
+    # platforms.add(Platform(0, 0, 800, 10))
+    platforms.add(Platform(0, 0, 10, screen_height-10))
+    platforms.add(Platform(screen_width - 10, 0, 10, screen_height - 10))
 
     # Add the player to a sprite group
     all_sprites = pygame.sprite.Group()
