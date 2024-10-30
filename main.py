@@ -2,6 +2,9 @@ import pygame
 import math
 
 GRID_SIZE = 20
+SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
+FPS = 30
+
 
 class Player(pygame.sprite.Sprite):
     def __init__(self):
@@ -101,9 +104,13 @@ class Player(pygame.sprite.Sprite):
                 self.rect.top = hits[0].rect.bottom
                 self.vel_y = 0
 
-    def draw(self, screen):
-        # Draw the image 10 pixels to the left of the rect
-        screen.blit(self.image, (self.rect.x - 15, self.rect.y - 7 ))
+    # def draw(self, screen):
+    #     # Draw the image 10 pixels to the left of the rect
+    #     screen.blit(self.image, (self.rect.x - 15, self.rect.y - 7 ))
+
+    def draw(self, screen, camera):
+        offset_position = camera.apply(self).move(-15, -7)  # Adjust for your desired offset
+        screen.blit(self.image, offset_position)
 
 
 def draw_gradient(screen, color_top, color_bottom, width, height):
@@ -130,6 +137,9 @@ class Platform(pygame.sprite.Sprite):
         self.rect.x = x
         self.rect.y = y
 
+    def draw(self, screen, camera):
+        screen.blit(self.image, camera.apply(self))
+
 
 def create_platform(start_pos, end_pos):
     """Create a platform between start_pos and end_pos."""
@@ -149,6 +159,40 @@ def snap_to_grid(pos, grid_size):
     return (x, y)
 
 
+# Camera class
+class Camera:
+    def __init__(self, width, height):
+        self.camera_rect = pygame.Rect(0, 0, width, height)
+        self.width = width
+        self.height = height
+
+    def apply(self, entity):
+        # Adjust the entity position relative to the camera
+        return entity.rect.move(self.camera_rect.topleft)
+
+    def update(self, target):
+        # Center the camera on the player
+        x = -target.rect.centerx + SCREEN_WIDTH // 2
+        y = -target.rect.centery + SCREEN_HEIGHT // 2
+
+        # Clamp the camera within the level bounds
+        x = min(0, x)  # Left boundary
+        y = min(0, y)  # Top boundary
+        x = max(-(self.width - SCREEN_WIDTH), x)  # Right boundary
+        y = max(-(self.height - SCREEN_HEIGHT), y)  # Bottom boundary
+
+        self.camera_rect = pygame.Rect(x, y, self.width, self.height)
+
+
+# Convert mouse position to world position considering the camera's offset
+def get_world_position(mouse_pos, camera):
+    # Adjust the mouse position by subtracting the camera's top-left offset
+    return (
+            mouse_pos[0] - camera.camera_rect.topleft[0],
+            mouse_pos[1] - camera.camera_rect.topleft[1]
+            )
+
+
 if __name__ == '__main__':
 
     pygame.init()
@@ -156,8 +200,9 @@ if __name__ == '__main__':
     # Set up display
     screenInfo = pygame.display.Info()
     screen_width = screenInfo.current_w
-    screen_height = screenInfo.current_h - 55
-    screen = pygame.display.set_mode((screen_width, screen_height))
+    screen_height = screenInfo.current_h
+    # screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
     pygame.display.set_caption("daGame")
 
     # Define gradient colors (top and bottom)
@@ -170,6 +215,9 @@ if __name__ == '__main__':
     # Create a player
     player = Player()
 
+    # Create camera
+    camera = Camera(2000, 1000)
+
     # Create platforms
     platforms = pygame.sprite.Group()
 
@@ -177,27 +225,43 @@ if __name__ == '__main__':
     start_pos = None  # Starting position for the platform creation
     current_platform = None  # The platform being created
 
-    platforms.add(Platform(100, 500, 200, 20))
-    platforms.add(Platform(400, 400, 200, 20))
-    platforms.add(Platform(250, 300, 200, 30))
-    # box
-    platforms.add(Platform(0, screen_height - 10, screen_width, 10))
-    # platforms.add(Platform(0, 0, 800, 10))
-    platforms.add(Platform(0, 0, 10, screen_height-10))
-    platforms.add(Platform(screen_width - 10, 0, 10, screen_height - 10))
-
     # Add the player to a sprite group
     all_sprites = pygame.sprite.Group()
     # all_sprites.add(player)
     all_sprites.add(platforms)
 
+    # Create a platform at the bottom of the camera's initial view
+    platform_y = camera.height + 100  # Adjust for platform height
+    bottom_platform = Platform(0, platform_y, camera.width, 20)
+    # Add the bottom platform to the platforms group
+    platforms.add(bottom_platform)
+    platforms.add(Platform(0, 100, 10, camera.height))
+    platforms.add(Platform(camera.width - 10, 100, 10, camera.height))
+
+    # Full-screen state variable
+    is_fullscreen = True
+
     # Main game loop
     running = True
     while running:
         clock.tick(60)
-
+        camera.update(player)
+        player.update(platforms)
         # Event handling
         for event in pygame.event.get():
+
+            # Toggle full-screen when F11 is pressed
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+                if is_fullscreen:
+                    # Switch to windowed mode
+                    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+                    is_fullscreen = False
+
+                else:
+                    # Switch to fullscreen mode
+                    screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
+                    is_fullscreen = True
+
             if event.type == pygame.QUIT:
                 running = False
             if event.type == pygame.KEYDOWN:
@@ -206,20 +270,28 @@ if __name__ == '__main__':
 
             # Left mouse button pressed (start drawing a platform)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                start_pos = pygame.mouse.get_pos()
+                start_pos = get_world_position(pygame.mouse.get_pos(), camera)
+                draw_start_pos = pygame.mouse.get_pos()
                 is_drawing = True
 
             # Left mouse button released (finish drawing the platform)
             if event.type == pygame.MOUSEBUTTONUP and event.button == 1 and is_drawing:
-                end_pos = pygame.mouse.get_pos()
+                end_pos = get_world_position(pygame.mouse.get_pos(), camera)
+
+                # Create the platform with adjusted world coordinates
                 platform = create_platform(start_pos, end_pos)
+
+                # Add the new platform to the platforms group
                 platforms.add(platform)
+
+                # Reset drawing state
                 is_drawing = False
+                start_pos = None
+                end_pos = None
 
             # Right mouse button pressed (delete platform)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
-                mouse_pos = pygame.mouse.get_pos()
-                # Check if any platforms collide with the mouse position
+                mouse_pos = get_world_position(pygame.mouse.get_pos(), camera)  # Adjust for camera offset
                 for platform in platforms:
                     if platform.rect.collidepoint(mouse_pos):
                         platforms.remove(platform)
@@ -236,14 +308,28 @@ if __name__ == '__main__':
         # screen.fill((255, 255, 255))  # Fill the screen with white
         # pygame.draw.rect(screen, (255, 0, 0), player.rect, 1)  # Red rectangle, thickness of 2
         # all_sprites.draw(screen)
-        platforms.draw(screen)
-        player.draw(screen)
+        for platform in platforms:
+            platform.draw(screen, camera)
+        player.draw(screen, camera)
 
-        # If drawing, show the preview of the platform
+        # Draw the platform preview last to avoid layering issues
         if is_drawing:
-            current_pos = pygame.mouse.get_pos()
-            temp_platform = create_platform(start_pos, current_pos)
-            pygame.draw.rect(screen, (0, 255, 0), temp_platform.rect, 2)  # Draw platform preview
+            # Get the current mouse position in screen space (no need for world conversion)
+            mouse_pos = pygame.mouse.get_pos()
+
+            snapped_start_pos = snap_to_grid(draw_start_pos, GRID_SIZE)
+            snapped_mouse_pos = snap_to_grid(mouse_pos, GRID_SIZE)
+
+            # Calculate the preview rectangle using the start position in screen space
+            preview_rect = pygame.Rect(
+                min(snapped_start_pos[0], snapped_mouse_pos[0]),
+                min(snapped_start_pos[1], snapped_mouse_pos[1]),
+                abs(snapped_mouse_pos[0] - snapped_start_pos[0]),
+                abs(snapped_mouse_pos[1] - snapped_start_pos[1]),
+            )
+
+            # Draw the platform preview directly on the screen
+            pygame.draw.rect(screen, (0, 255, 0), preview_rect, 2)
 
         pygame.display.flip()
 
