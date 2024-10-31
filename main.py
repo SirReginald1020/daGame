@@ -1,10 +1,24 @@
 import pygame
+from genetic_algorithm import GABrain  # Import the GA class
 import math
 
 GRID_SIZE = 20
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 FPS = 30
 
+# Initialize Pygame and display
+pygame.init()
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("daGame")
+
+# Initialize GA brain
+ga_brain = GABrain(
+    population_size=10, 
+    mutation_rate=0.1, 
+    crossover_rate=0.7, 
+    sequence_length=100, 
+    goal_x=1000  # Adjust based on your level's goal position
+)
 
 class Player(pygame.sprite.Sprite):
     def __init__(self):
@@ -19,7 +33,7 @@ class Player(pygame.sprite.Sprite):
         self.current_frame = 0
         self.image = self.frames[self.current_frame]
         self.rect = pygame.Rect(0, 0, 34, 57)
-        self.rect.center = (screen_width // 2, screen_height // 2)
+        self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
         self.vel_y = 0
         self.speed = 5
         self.jumping = False
@@ -104,27 +118,18 @@ class Player(pygame.sprite.Sprite):
                 self.rect.top = hits[0].rect.bottom
                 self.vel_y = 0
 
-    # def draw(self, screen):
-    #     # Draw the image 10 pixels to the left of the rect
-    #     screen.blit(self.image, (self.rect.x - 15, self.rect.y - 7 ))
-
     def draw(self, screen, camera):
-        offset_position = camera.apply(self).move(-15, -7)  # Adjust for your desired offset
+        offset_position = camera.apply(self).move(-15, -7)
         screen.blit(self.image, offset_position)
 
 
 def draw_gradient(screen, color_top, color_bottom, width, height):
     """Draw a vertical gradient from color_top to color_bottom."""
     for y in range(height):
-        # Calculate the interpolation factor between top and bottom colors
         factor = y / height
-
-        # Interpolate between top and bottom colors
         r = int(color_top[0] + factor * (color_bottom[0] - color_top[0]))
         g = int(color_top[1] + factor * (color_bottom[1] - color_top[1]))
         b = int(color_top[2] + factor * (color_bottom[2] - color_top[2]))
-
-        # Draw a horizontal line with the calculated color
         pygame.draw.line(screen, (r, g, b), (0, y), (width, y))
 
 
@@ -159,7 +164,6 @@ def snap_to_grid(pos, grid_size):
     return (x, y)
 
 
-# Camera class
 class Camera:
     def __init__(self, width, height):
         self.camera_rect = pygame.Rect(0, 0, width, height)
@@ -167,171 +171,89 @@ class Camera:
         self.height = height
 
     def apply(self, entity):
-        # Adjust the entity position relative to the camera
         return entity.rect.move(self.camera_rect.topleft)
 
     def update(self, target):
-        # Center the camera on the player
         x = -target.rect.centerx + SCREEN_WIDTH // 2
         y = -target.rect.centery + SCREEN_HEIGHT // 2
-
-        # Clamp the camera within the level bounds
         x = min(0, x)  # Left boundary
         y = min(0, y)  # Top boundary
         x = max(-(self.width - SCREEN_WIDTH), x)  # Right boundary
         y = max(-(self.height - SCREEN_HEIGHT), y)  # Bottom boundary
-
         self.camera_rect = pygame.Rect(x, y, self.width, self.height)
 
 
-# Convert mouse position to world position considering the camera's offset
 def get_world_position(mouse_pos, camera):
-    # Adjust the mouse position by subtracting the camera's top-left offset
     return (
-            mouse_pos[0] - camera.camera_rect.topleft[0],
-            mouse_pos[1] - camera.camera_rect.topleft[1]
-            )
+        mouse_pos[0] - camera.camera_rect.topleft[0],
+        mouse_pos[1] - camera.camera_rect.topleft[1]
+    )
 
 
-if __name__ == '__main__':
+# Main game loop
+running = True
+generation = 0
 
-    pygame.init()
+# Define gradient colors (top and bottom)
+color_top = (186, 223, 255)  # Lighter blue (top)
+color_bottom = (104, 183, 252)  # Darker blue (bottom)
 
-    # Set up display
-    screenInfo = pygame.display.Info()
-    screen_width = screenInfo.current_w
-    screen_height = screenInfo.current_h
-    # screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
-    pygame.display.set_caption("daGame")
+# Create a player
+player = Player()
 
-    # Define gradient colors (top and bottom)
-    color_top = (186, 223, 255)  # Lighter blue (top)
-    color_bottom = (104, 183, 252)  # Darker blue (bottom)
+# Create camera
+camera = Camera(2000, 1000)
 
-    # Set up clock
+# Create platforms
+platforms = pygame.sprite.Group()
+platform_y = camera.height + 100
+bottom_platform = Platform(0, platform_y, camera.width, 20)
+platforms.add(bottom_platform)
+platforms.add(Platform(0, 100, 10, camera.height))
+platforms.add(Platform(camera.width - 10, 100, 10, camera.height))
+
+# Full-screen state variable
+is_fullscreen = True
+
+while running:
     clock = pygame.time.Clock()
+    clock.tick(60)
+    camera.update(player)
+    player.update(platforms)
 
-    # Create a player
-    player = Player()
+    # Event handling
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+            if is_fullscreen:
+                screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+                is_fullscreen = False
+            else:
+                screen = pygame.display.set_mode((screen.get_width(), screen.get_height()), pygame.FULLSCREEN)
+                is_fullscreen = True
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+            player.jump()
 
-    # Create camera
-    camera = Camera(2000, 1000)
+    # === Genetic Algorithm Logic ===
+    for agent in ga_brain.population:
+        fitness = ga_brain.calculate_fitness(agent)
 
-    # Create platforms
-    platforms = pygame.sprite.Group()
+    if generation % 10 == 0:
+        ga_brain.evolve()
+        generation += 1
+    # === End of Genetic Algorithm Logic ===
 
-    is_drawing = False
-    start_pos = None  # Starting position for the platform creation
-    current_platform = None  # The platform being created
+    # Draw blue gradient background
+    draw_gradient(screen, color_top, color_bottom, SCREEN_WIDTH, SCREEN_HEIGHT)
+    all_sprites = pygame.sprite.Group(player)
+    all_sprites.update(platforms)
 
-    # Add the player to a sprite group
-    all_sprites = pygame.sprite.Group()
-    # all_sprites.add(player)
-    all_sprites.add(platforms)
+    # Draw platforms and player
+    for platform in platforms:
+        platform.draw(screen, camera)
+    player.draw(screen, camera)
 
-    # Create a platform at the bottom of the camera's initial view
-    platform_y = camera.height + 100  # Adjust for platform height
-    bottom_platform = Platform(0, platform_y, camera.width, 20)
-    # Add the bottom platform to the platforms group
-    platforms.add(bottom_platform)
-    platforms.add(Platform(0, 100, 10, camera.height))
-    platforms.add(Platform(camera.width - 10, 100, 10, camera.height))
+    pygame.display.flip()
 
-    # Full-screen state variable
-    is_fullscreen = True
-
-    # Main game loop
-    running = True
-    while running:
-        clock.tick(60)
-        camera.update(player)
-        player.update(platforms)
-        # Event handling
-        for event in pygame.event.get():
-
-            # Toggle full-screen when F11 is pressed
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
-                if is_fullscreen:
-                    # Switch to windowed mode
-                    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-                    is_fullscreen = False
-
-                else:
-                    # Switch to fullscreen mode
-                    screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
-                    is_fullscreen = True
-
-            if event.type == pygame.QUIT:
-                running = False
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    player.jump()
-
-            # Left mouse button pressed (start drawing a platform)
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                start_pos = get_world_position(pygame.mouse.get_pos(), camera)
-                draw_start_pos = pygame.mouse.get_pos()
-                is_drawing = True
-
-            # Left mouse button released (finish drawing the platform)
-            if event.type == pygame.MOUSEBUTTONUP and event.button == 1 and is_drawing:
-                end_pos = get_world_position(pygame.mouse.get_pos(), camera)
-
-                # Create the platform with adjusted world coordinates
-                platform = create_platform(start_pos, end_pos)
-
-                # Add the new platform to the platforms group
-                platforms.add(platform)
-
-                # Reset drawing state
-                is_drawing = False
-                start_pos = None
-                end_pos = None
-
-            # Right mouse button pressed (delete platform)
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
-                mouse_pos = get_world_position(pygame.mouse.get_pos(), camera)  # Adjust for camera offset
-                for platform in platforms:
-                    if platform.rect.collidepoint(mouse_pos):
-                        platforms.remove(platform)
-                        break  # Stop after deleting one platform
-
-        # Draw blue gradient background
-        draw_gradient(screen, color_top, color_bottom, screen_width, screen_height)
-
-        # Update all sprites
-        all_sprites.update(platforms)
-        player.update(platforms)
-
-        # Drawing
-        # screen.fill((255, 255, 255))  # Fill the screen with white
-        # pygame.draw.rect(screen, (255, 0, 0), player.rect, 1)  # Red rectangle, thickness of 2
-        # all_sprites.draw(screen)
-        for platform in platforms:
-            platform.draw(screen, camera)
-        player.draw(screen, camera)
-
-        # Draw the platform preview last to avoid layering issues
-        if is_drawing:
-            # Get the current mouse position in screen space (no need for world conversion)
-            mouse_pos = pygame.mouse.get_pos()
-
-            snapped_start_pos = snap_to_grid(draw_start_pos, GRID_SIZE)
-            snapped_mouse_pos = snap_to_grid(mouse_pos, GRID_SIZE)
-
-            # Calculate the preview rectangle using the start position in screen space
-            preview_rect = pygame.Rect(
-                min(snapped_start_pos[0], snapped_mouse_pos[0]),
-                min(snapped_start_pos[1], snapped_mouse_pos[1]),
-                abs(snapped_mouse_pos[0] - snapped_start_pos[0]),
-                abs(snapped_mouse_pos[1] - snapped_start_pos[1]),
-            )
-
-            # Draw the platform preview directly on the screen
-            pygame.draw.rect(screen, (0, 255, 0), preview_rect, 2)
-
-        pygame.display.flip()
-
-    pygame.quit()
-
+pygame.quit()
