@@ -1,11 +1,25 @@
 import pygame
 from genetic_algorithm import GABrain  # Import the GA class
+from genetic_algorithm import GABrain  # Import the GA class
 import math
 
 GRID_SIZE = 20
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 FPS = 30
 
+# Initialize Pygame and display
+pygame.init()
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("daGame")
+
+# Initialize GA brain
+ga_brain = GABrain(
+    population_size=10, 
+    mutation_rate=0.1, 
+    crossover_rate=0.7, 
+    sequence_length=100, 
+    goal_x=1000  # Adjust based on your level's goal position
+)
 # Initialize Pygame and display
 pygame.init()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -33,6 +47,7 @@ class Player(pygame.sprite.Sprite):
         self.current_frame = 0
         self.image = self.frames[self.current_frame]
         self.rect = pygame.Rect(0, 0, 34, 57)
+        self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
         self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
         self.vel_y = 0
         self.speed = 5
@@ -133,19 +148,6 @@ def draw_gradient(screen, color_top, color_bottom, width, height):
         pygame.draw.line(screen, (r, g, b), (0, y), (width, y))
 
 
-class Platform(pygame.sprite.Sprite):
-    def __init__(self, x, y, width, height):
-        super().__init__()
-        self.image = pygame.Surface((width, height))
-        self.image.fill((0, 255, 0))  # Green color for the platform
-        self.rect = self.image.get_rect()
-        self.rect.x = x
-        self.rect.y = y
-
-    def draw(self, screen, camera):
-        screen.blit(self.image, camera.apply(self))
-
-
 def create_platform(start_pos, end_pos):
     """Create a platform between start_pos and end_pos."""
     start_pos = snap_to_grid(start_pos, GRID_SIZE)
@@ -188,8 +190,14 @@ def get_world_position(mouse_pos, camera):
         mouse_pos[0] - camera.camera_rect.topleft[0],
         mouse_pos[1] - camera.camera_rect.topleft[1]
     )
+        mouse_pos[0] - camera.camera_rect.topleft[0],
+        mouse_pos[1] - camera.camera_rect.topleft[1]
+    )
 
 
+# Main game loop
+running = True
+generation = 0
 # Main game loop
 running = True
 generation = 0
@@ -197,10 +205,17 @@ generation = 0
 # Define gradient colors (top and bottom)
 color_top = (186, 223, 255)  # Lighter blue (top)
 color_bottom = (104, 183, 252)  # Darker blue (bottom)
+# Define gradient colors (top and bottom)
+color_top = (186, 223, 255)  # Lighter blue (top)
+color_bottom = (104, 183, 252)  # Darker blue (bottom)
 
 # Create a player
 player = Player()
+# Create a player
+player = Player()
 
+# Create camera
+camera = Camera(2000, 1000)
 # Create camera
 camera = Camera(2000, 1000)
 
@@ -211,10 +226,38 @@ bottom_platform = Platform(0, platform_y, camera.width, 20)
 platforms.add(bottom_platform)
 platforms.add(Platform(0, 100, 10, camera.height))
 platforms.add(Platform(camera.width - 10, 100, 10, camera.height))
+# Create platforms
+platforms = pygame.sprite.Group()
+platform_y = camera.height + 100
+bottom_platform = Platform(0, platform_y, camera.width, 20)
+platforms.add(bottom_platform)
+platforms.add(Platform(0, 100, 10, camera.height))
+platforms.add(Platform(camera.width - 10, 100, 10, camera.height))
 
 # Full-screen state variable
 is_fullscreen = True
+# Full-screen state variable
+is_fullscreen = True
 
+while running:
+    clock = pygame.time.Clock()
+    clock.tick(60)
+    camera.update(player)
+    player.update(platforms)
+
+    # Event handling
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+            if is_fullscreen:
+                screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+                is_fullscreen = False
+            else:
+                screen = pygame.display.set_mode((screen.get_width(), screen.get_height()), pygame.FULLSCREEN)
+                is_fullscreen = True
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+            player.jump()
 while running:
     clock = pygame.time.Clock()
     clock.tick(60)
@@ -243,7 +286,19 @@ while running:
         ga_brain.evolve()
         generation += 1
     # === End of Genetic Algorithm Logic ===
+    # === Genetic Algorithm Logic ===
+    for agent in ga_brain.population:
+        fitness = ga_brain.calculate_fitness(agent)
 
+    if generation % 10 == 0:
+        ga_brain.evolve()
+        generation += 1
+    # === End of Genetic Algorithm Logic ===
+
+    # Draw blue gradient background
+    draw_gradient(screen, color_top, color_bottom, SCREEN_WIDTH, SCREEN_HEIGHT)
+    all_sprites = pygame.sprite.Group(player)
+    all_sprites.update(platforms)
     # Draw blue gradient background
     draw_gradient(screen, color_top, color_bottom, SCREEN_WIDTH, SCREEN_HEIGHT)
     all_sprites = pygame.sprite.Group(player)
@@ -253,7 +308,13 @@ while running:
     for platform in platforms:
         platform.draw(screen, camera)
     player.draw(screen, camera)
+    # Draw platforms and player
+    for platform in platforms:
+        platform.draw(screen, camera)
+    player.draw(screen, camera)
 
     pygame.display.flip()
+    pygame.display.flip()
 
+pygame.quit()
 pygame.quit()
