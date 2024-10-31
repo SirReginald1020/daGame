@@ -1,116 +1,12 @@
 import pygame
+from Player import Player
+from Platform import Platform
+import json
 import math
 
 GRID_SIZE = 20
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 FPS = 30
-
-
-class Player(pygame.sprite.Sprite):
-    def __init__(self):
-        super().__init__()
-        # Load the sprite sheet
-        self.frames = []
-        for i in range(1, 11):
-            frame = pygame.image.load(f"sprites/Running/Sprite-0001-lilGuyRunning{i}.png")
-            frame = pygame.transform.scale(frame, (frame.get_width() * 4, frame.get_height() * 4))
-            self.frames.append(frame)
-
-        self.current_frame = 0
-        self.image = self.frames[self.current_frame]
-        self.rect = pygame.Rect(0, 0, 34, 57)
-        self.rect.center = (screen_width // 2, screen_height // 2)
-        self.vel_y = 0
-        self.speed = 5
-        self.jumping = False
-        self.flipped = False  # Track whether the player is moving left or right
-
-        # Animation timing
-        self.animation_timer = 0
-        self.animation_speed = 3.5  # Adjust this for faster/slower animation speed
-
-    def animate(self):
-        # Update frame based on time
-        self.animation_timer += 1
-        if self.animation_timer >= self.animation_speed:
-            self.current_frame = (self.current_frame + 1) % len(self.frames)
-            self.animation_timer = 0
-
-        # Get current frame and flip it if moving left
-        frame = self.frames[self.current_frame]
-        if self.flipped:
-            frame = pygame.transform.flip(frame, True, False)
-
-        # Update image with the current frame
-        self.image = frame
-
-    def update(self, platforms):
-        moving = False
-        # Horizontal movement
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_a]:
-            self.rect.x -= self.speed
-            self.flipped = True  # Moving left
-            self.animate()
-            moving = True
-        elif keys[pygame.K_d]:
-            self.rect.x += self.speed
-            self.flipped = False  # Moving right
-            self.animate()
-            moving = True
-
-        if not moving:
-            self.current_frame = 0  # Set to the first frame (idle)
-            frame = self.frames[self.current_frame]
-            if self.flipped:
-                frame = pygame.transform.flip(frame, True, False)  # Flip if last facing left
-            self.image = frame
-
-        # Check for horizontal collisions
-        self.horizontal_collisions(platforms)
-
-        # Gravity and vertical movement
-        self.vel_y += 1  # Gravity
-        self.rect.y += self.vel_y
-
-        # Check for vertical collisions
-        self.vertical_collisions(platforms)
-
-    def jump(self):
-        if not self.jumping:
-            self.vel_y = -15
-            self.jumping = True
-
-    def horizontal_collisions(self, platforms):
-        # Check for collisions when moving left or right
-        hits = pygame.sprite.spritecollide(self, platforms, False)
-        for hit in hits:
-            # Moving right; hit the left side of a platform
-            if self.rect.right > hit.rect.left > self.rect.left:
-                self.rect.right = hit.rect.left
-            # Moving left; hit the right side of a platform
-            elif self.rect.left < hit.rect.right < self.rect.right:
-                self.rect.left = hit.rect.right
-
-    def vertical_collisions(self, platforms):
-        # Check for collisions when falling or jumping
-        hits = pygame.sprite.spritecollide(self, platforms, False)
-        if hits:
-            if self.vel_y > 0:  # Falling down
-                self.rect.bottom = hits[0].rect.top
-                self.vel_y = 0
-                self.jumping = False  # Can jump again
-            elif self.vel_y < 0:  # Jumping up
-                self.rect.top = hits[0].rect.bottom
-                self.vel_y = 0
-
-    # def draw(self, screen):
-    #     # Draw the image 10 pixels to the left of the rect
-    #     screen.blit(self.image, (self.rect.x - 15, self.rect.y - 7 ))
-
-    def draw(self, screen, camera):
-        offset_position = camera.apply(self).move(-15, -7)  # Adjust for your desired offset
-        screen.blit(self.image, offset_position)
 
 
 def draw_gradient(screen, color_top, color_bottom, width, height):
@@ -126,19 +22,6 @@ def draw_gradient(screen, color_top, color_bottom, width, height):
 
         # Draw a horizontal line with the calculated color
         pygame.draw.line(screen, (r, g, b), (0, y), (width, y))
-
-
-class Platform(pygame.sprite.Sprite):
-    def __init__(self, x, y, width, height):
-        super().__init__()
-        self.image = pygame.Surface((width, height))
-        self.image.fill((0, 255, 0))  # Green color for the platform
-        self.rect = self.image.get_rect()
-        self.rect.x = x
-        self.rect.y = y
-
-    def draw(self, screen, camera):
-        screen.blit(self.image, camera.apply(self))
 
 
 def create_platform(start_pos, end_pos):
@@ -157,6 +40,35 @@ def snap_to_grid(pos, grid_size):
     x = round(pos[0] / grid_size) * grid_size
     y = round(pos[1] / grid_size) * grid_size
     return (x, y)
+
+
+def save_platforms(platforms):
+    """Save platforms to a file."""
+    platform_data = [
+        {"x": platform.rect.x, "y": platform.rect.y, "width": platform.rect.width, "height": platform.rect.height}
+        for platform in platforms
+    ]
+    with open("platforms.json", "w") as file:
+        json.dump(platform_data, file)
+    print("Platforms saved successfully.")
+
+def draw_menu(screen):
+    """Draw the pause menu."""
+    screenW = pygame.display.Info().current_w
+    screenH = pygame.display.Info().current_h
+    font = pygame.font.Font(None, 36)
+    options = ["Save Platforms", "Exit Game"]
+
+    # Background overlay
+    menu_rect = pygame.Surface((screenW, screenH), pygame.SRCALPHA)
+    menu_rect.fill((0, 0, 0, 180))  # Black transparent overlay
+    screen.blit(menu_rect, (0, 0))
+
+    # Draw menu options
+    for i, option in enumerate(options):
+        color = (255, 255, 255) if i == selected_option else (150, 150, 150)
+        text = font.render(option, True, color)
+        screen.blit(text, (screenW // 2 - text.get_width() // 2, screenH // 2 + i * 40 - 20))
 
 
 # Camera class
@@ -196,6 +108,9 @@ def get_world_position(mouse_pos, camera):
 if __name__ == '__main__':
 
     pygame.init()
+
+    is_menu_open = False
+    selected_option = 0  # 0 for Save Platforms, 1 for Exit Game
 
     # Set up display
     screenInfo = pygame.display.Info()
@@ -250,6 +165,26 @@ if __name__ == '__main__':
         # Event handling
         for event in pygame.event.get():
 
+            if event.type == pygame.QUIT:
+                running = False
+
+            # Toggle the menu with Escape key
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    is_menu_open = not is_menu_open
+
+                # Handle menu navigation and selection if the menu is open
+                if is_menu_open:
+                    if event.key == pygame.K_DOWN:
+                        selected_option = (selected_option + 1) % 2
+                    elif event.key == pygame.K_UP:
+                        selected_option = (selected_option - 1) % 2
+                    elif event.key == pygame.K_RETURN:  # Select option
+                        if selected_option == 0:  # Save Platforms
+                            save_platforms(platforms)
+                            is_menu_open = False  # Close menu after saving
+                        elif selected_option == 1:  # Exit Game
+                            running = False  # Exit game loop
             # Toggle full-screen when F11 is pressed
             if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
                 if is_fullscreen:
@@ -330,7 +265,8 @@ if __name__ == '__main__':
 
             # Draw the platform preview directly on the screen
             pygame.draw.rect(screen, (0, 255, 0), preview_rect, 2)
-
+        if is_menu_open:
+            draw_menu(screen)  # Display the menu
         pygame.display.flip()
 
     pygame.quit()
