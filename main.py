@@ -1,6 +1,7 @@
 import pygame
 from Player import Player
 from Platform import Platform
+import json
 import math
 
 GRID_SIZE = 20
@@ -41,6 +42,35 @@ def snap_to_grid(pos, grid_size):
     return (x, y)
 
 
+def save_platforms(platforms):
+    """Save platforms to a file."""
+    platform_data = [
+        {"x": platform.rect.x, "y": platform.rect.y, "width": platform.rect.width, "height": platform.rect.height}
+        for platform in platforms
+    ]
+    with open("platforms.json", "w") as file:
+        json.dump(platform_data, file)
+    print("Platforms saved successfully.")
+
+def draw_menu(screen):
+    """Draw the pause menu."""
+    screenW = pygame.display.Info().current_w
+    screenH = pygame.display.Info().current_h
+    font = pygame.font.Font(None, 36)
+    options = ["Save Platforms", "Exit Game"]
+
+    # Background overlay
+    menu_rect = pygame.Surface((screenW, screenH), pygame.SRCALPHA)
+    menu_rect.fill((0, 0, 0, 180))  # Black transparent overlay
+    screen.blit(menu_rect, (0, 0))
+
+    # Draw menu options
+    for i, option in enumerate(options):
+        color = (255, 255, 255) if i == selected_option else (150, 150, 150)
+        text = font.render(option, True, color)
+        screen.blit(text, (screenW // 2 - text.get_width() // 2, screenH // 2 + i * 40 - 20))
+
+
 # Camera class
 class Camera:
     def __init__(self, width, height):
@@ -78,6 +108,9 @@ def get_world_position(mouse_pos, camera):
 if __name__ == '__main__':
 
     pygame.init()
+
+    is_menu_open = False
+    selected_option = 0  # 0 for Save Platforms, 1 for Exit Game
 
     # Set up display
     screenInfo = pygame.display.Info()
@@ -132,6 +165,26 @@ if __name__ == '__main__':
         # Event handling
         for event in pygame.event.get():
 
+            if event.type == pygame.QUIT:
+                running = False
+
+            # Toggle the menu with Escape key
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    is_menu_open = not is_menu_open
+
+                # Handle menu navigation and selection if the menu is open
+                if is_menu_open:
+                    if event.key == pygame.K_DOWN:
+                        selected_option = (selected_option + 1) % 2
+                    elif event.key == pygame.K_UP:
+                        selected_option = (selected_option - 1) % 2
+                    elif event.key == pygame.K_RETURN:  # Select option
+                        if selected_option == 0:  # Save Platforms
+                            save_platforms(platforms)
+                            is_menu_open = False  # Close menu after saving
+                        elif selected_option == 1:  # Exit Game
+                            running = False  # Exit game loop
             # Toggle full-screen when F11 is pressed
             if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
                 if is_fullscreen:
@@ -212,7 +265,8 @@ if __name__ == '__main__':
 
             # Draw the platform preview directly on the screen
             pygame.draw.rect(screen, (0, 255, 0), preview_rect, 2)
-
+        if is_menu_open:
+            draw_menu(screen)  # Display the menu
         pygame.display.flip()
 
     pygame.quit()
