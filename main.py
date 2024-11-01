@@ -1,6 +1,7 @@
 import pygame
 from Player import Player
 from Platform import Platform
+from Camera import Camera
 import json
 import os
 import math
@@ -43,17 +44,20 @@ def snap_to_grid(pos, grid_size):
     return (x, y)
 
 
-def save_platforms(platforms):
-    """Save platforms to a file."""
+def save_platforms(platforms, filename):
+    """Save platforms to a file with the given filename."""
     platform_data = [
         {"x": platform.rect.x, "y": platform.rect.y, "width": platform.rect.width, "height": platform.rect.height}
         for platform in platforms
     ]
-    if not os.path.exists("Levels"):  # Make the levels directory
+    if not os.path.exists("Levels"):
         os.mkdir("Levels")
-    with open("Levels/platforms.json", "w") as file:
+    file_path = os.path.join("Levels", filename + ".json")
+    with open(file_path, "w") as file:
         json.dump(platform_data, file)
-    print("Platforms saved successfully.")
+    print(f"Platforms saved successfully as {filename}.json")
+    global level_files
+    level_files = [f for f in os.listdir("Levels") if f.endswith(".json")]
 
 def draw_menu(screen):
     """Draw the pause menu."""
@@ -106,30 +110,21 @@ def draw_load_menu(screen, level_files, selected_level_index):
         text = font.render(filename, True, color)
         screen.blit(text, (screenW // 2 - text.get_width() // 2, screenH // 2 + i * 40 - 20))
 
+def draw_text_input(screen, filename_input):
+    """Draw the text input box for saving a file."""
+    screenW = pygame.display.Info().current_w
+    screenH = pygame.display.Info().current_h
+    font = pygame.font.Font(None, 36)
+    input_box = pygame.Surface((screenW, screenH), pygame.SRCALPHA)
+    input_box.fill((0, 0, 0, 180))
+    screen.blit(input_box, (0, 0))
 
-# Camera class
-class Camera:
-    def __init__(self, width, height):
-        self.camera_rect = pygame.Rect(0, 0, width, height)
-        self.width = width
-        self.height = height
+    prompt_text = font.render("Enter level name:", True, (255, 255, 255))
+    filename_text = font.render(filename_input, True, (255, 255, 255))
 
-    def apply(self, entity):
-        # Adjust the entity position relative to the camera
-        return entity.rect.move(self.camera_rect.topleft)
-
-    def update(self, target):
-        # Center the camera on the player
-        x = -target.rect.centerx + SCREEN_WIDTH // 2
-        y = -target.rect.centery + SCREEN_HEIGHT // 2
-
-        # Clamp the camera within the level bounds
-        x = min(0, x)  # Left boundary
-        y = min(0, y)  # Top boundary
-        x = max(-(self.width - SCREEN_WIDTH), x)  # Right boundary
-        y = max(-(self.height - SCREEN_HEIGHT), y)  # Bottom boundary
-
-        self.camera_rect = pygame.Rect(x, y, self.width, self.height)
+    # Center the prompt and filename on the screen
+    screen.blit(prompt_text, (screenW // 2 - prompt_text.get_width() // 2, screenH // 2 - 40))
+    screen.blit(filename_text, (screenW // 2 - filename_text.get_width() // 2, screenH // 2))
 
 
 # Convert mouse position to world position considering the camera's offset
@@ -140,6 +135,11 @@ def get_world_position(mouse_pos, camera):
             mouse_pos[1] - camera.camera_rect.topleft[1]
             )
 
+# Global variable(s)
+if os.path.exists("Levels"):
+    level_files = [f for f in os.listdir("Levels") if f.endswith(".json")]
+else:
+    level_files = None
 
 if __name__ == '__main__':
 
@@ -149,11 +149,9 @@ if __name__ == '__main__':
     is_load_menu_open = False
     selected_option = 0  # 0 for Save Platforms, 1 for Load Level, 2 for Exit Game
     selected_level_index = 0
+    filename_input = ""
+    is_text_input = False
     # Retrieve list of JSON files in Levels directory
-    if os.path.exists("Levels"):
-        level_files = [f for f in os.listdir("Levels") if f.endswith(".json")]
-    else:
-        level_files = None
 
     # Set up display
     screenInfo = pygame.display.Info()
@@ -214,7 +212,27 @@ if __name__ == '__main__':
             # Toggle the menu with Escape key
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    is_menu_open = not is_menu_open
+                    if is_text_input:
+                        is_text_input = False  # Exit text input if in text input mode
+                    elif is_load_menu_open:
+                        is_load_menu_open = False
+                    else:
+                        is_menu_open = not is_menu_open
+
+                # Handle text input for filename
+                elif is_text_input:
+                    if event.key == pygame.K_RETURN:
+                        # Save platforms with the entered filename
+                        save_platforms(platforms, filename_input)
+                        filename_input = ""  # Clear filename input
+                        is_text_input = False  # Exit text input mode
+                        is_menu_open = False  # Close menu after saving
+                    elif event.key == pygame.K_BACKSPACE:
+                        filename_input = filename_input[:-1]  # Remove last character
+                    elif event.key == pygame.K_SPACE:
+                        filename_input += " "
+                    else:
+                        filename_input += event.unicode  # Append character to filename
 
                 # Handle menu navigation and selection if the menu is open
                 if is_menu_open and not is_load_menu_open:
@@ -224,8 +242,7 @@ if __name__ == '__main__':
                         selected_option = (selected_option - 1) % 3
                     elif event.key == pygame.K_RETURN:
                         if selected_option == 0:  # Save Platforms
-                            save_platforms(platforms)
-                            is_menu_open = False
+                            is_text_input = True  # Enter text input mode
                         elif selected_option == 1:  # Load Level
                             is_load_menu_open = True
                             selected_level_index = 0  # Reset to first level
@@ -323,7 +340,9 @@ if __name__ == '__main__':
             # Draw the platform preview directly on the screen
             pygame.draw.rect(screen, (0, 255, 0), preview_rect, 2)
         if is_menu_open:
-            if is_load_menu_open:
+            if is_text_input:
+                draw_text_input(screen, filename_input)  # Show text input prompt
+            elif is_load_menu_open:
                 draw_load_menu(screen, level_files, selected_level_index)
             else:
                 draw_menu(screen)
