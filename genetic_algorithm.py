@@ -4,21 +4,64 @@ import random
 import pygame
 import json
 
+
 class Agent(pygame.sprite.Sprite):
-    def __init__(self, chromosome, start_x=0, start_y=0):
+    def __init__(self, chromosome, start_x=100, start_y=300):
         super().__init__()
         self.chromosome = chromosome
-        self.rect = pygame.Rect(start_x, start_y, 34, 57)  # Define the starting position and size
+        self.current_action_index = 0
+        self.rect = pygame.Rect(start_x, start_y, 34, 57)  # Starting position and size
+        self.vel_y = 0
+        self.speed = 4.5
+        self.jumping = False
 
     def perform_action(self, action):
         if action == 'move_left':
-            self.rect.x -= 5  # Adjust movement speed as necessary
+            self.rect.x -= self.speed  # Adjust movement speed as necessary
         elif action == 'move_right':
-            self.rect.x += 5
+            self.rect.x += self.speed
         elif action == 'jump':
-            self.rect.y -= 15  # Example jump; implement gravity as needed
+            self.rect.y -= 11  # Example jump; implement gravity as needed
+            self.jumping = True
         elif action == 'idle':
             pass  # No movement for idle
+
+    def apply_gravity(self):
+        self.vel_y += 0.35  # Gravity
+        self.rect.y += self.vel_y
+
+    def update(self, platforms):
+        # Perform action and apply gravity
+        self.perform_action()
+        self.apply_gravity()
+
+        # Handle collisions
+        self.horizontal_collisions(platforms)
+        self.vertical_collisions(platforms)
+
+    def horizontal_collisions(self, platforms):
+        hits = pygame.sprite.spritecollide(self, platforms, False)
+        for hit in hits:
+            if self.rect.right > hit.rect.left > self.rect.left:  # Moving right
+                self.rect.right = hit.rect.left
+            elif self.rect.left < hit.rect.right < self.rect.right:  # Moving left
+                self.rect.left = hit.rect.right
+
+    def vertical_collisions(self, platforms):
+        hits = pygame.sprite.spritecollide(self, platforms, False)
+        if hits:
+            if self.vel_y > 0:  # Falling down
+                self.rect.bottom = hits[0].rect.top
+                self.vel_y = 0
+                self.jumping = False
+            elif self.vel_y < 0:  # Jumping up
+                self.rect.top = hits[0].rect.bottom
+                self.vel_y = 0
+
+    def draw(self, screen, camera):
+        # Draw in relation to the camera
+        offset_position = camera.apply(self)
+        pygame.draw.rect(screen, (255, 0, 0), offset_position)  # Draw agent as a red rectangle
 
 
 class GABrain:
@@ -98,6 +141,6 @@ class GABrain:
             }
             for agent in self.population
         ]
-        with open(filename, "w") as file:
+        with open(filename, "a") as file:
             json.dump(population_data, file, indent=4)
         print("Population saved successfully to", filename)

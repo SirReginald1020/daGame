@@ -1,8 +1,8 @@
 import pygame
-from genetic_algorithm import GABrain  # Import the GA class
 from Player import Player
 from Platform import Platform
 from Camera import Camera
+from genetic_algorithm import GABrain  # Import the GA class
 import json
 import os
 import math
@@ -10,33 +10,27 @@ import math
 GRID_SIZE = 40
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 FPS = 30
-
-# Initialize Pygame and display
 pygame.init()
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("daGame")
 
-# Initialize GA brain
-ga_brain = GABrain(
-    population_size=10, 
-    mutation_rate=0.1, 
-    crossover_rate=0.7, 
-    sequence_length=100, 
-    goal_x=1000  # Adjust based on your level's goal position
-)
-
-# Define gradient colors (top and bottom)
-color_top = (186, 223, 255)  # Lighter blue (top)
-color_bottom = (104, 183, 252)  # Darker blue (bottom)
+def save_game_state():
+    """Save both platforms and genetic algorithm state."""
+    save_platforms(platforms)
+    ga_brain.save_population("population.json")
+    print("Game state saved successfully.")
 
 
 def draw_gradient(screen, color_top, color_bottom, width, height):
     """Draw a vertical gradient from color_top to color_bottom."""
     for y in range(height):
+        # Calculate the interpolation factor between top and bottom colors
         factor = y / height
+
+        # Interpolate between top and bottom colors
         r = int(color_top[0] + factor * (color_bottom[0] - color_top[0]))
         g = int(color_top[1] + factor * (color_bottom[1] - color_top[1]))
         b = int(color_top[2] + factor * (color_bottom[2] - color_top[2]))
+
+        # Draw a horizontal line with the calculated color
         pygame.draw.line(screen, (r, g, b), (0, y), (width, y))
 
 
@@ -64,11 +58,6 @@ def save_platforms(platforms, filename):
         {"x": platform.rect.x, "y": platform.rect.y, "width": platform.rect.width, "height": platform.rect.height}
         for platform in platforms
     ]
-<<<<<<< HEAD
-    with open("platforms.json", "w") as file:
-        json.dump(platform_data, file, indent=4)
-    print("Platforms saved successfully.")
-=======
     if not os.path.exists("Levels"):
         os.mkdir("Levels")
     file_path = os.path.join("Levels", filename + ".json")
@@ -77,26 +66,13 @@ def save_platforms(platforms, filename):
     print(f"Platforms saved successfully as {filename}.json")
     global level_files
     level_files = [f for f in os.listdir("Levels") if f.endswith(".json")]
->>>>>>> 0d78d4860518dcc2353d8f27bf890d541b153067
 
-
-def save_game_state():
-    """Save both platforms and genetic algorithm state."""
-    save_platforms(platforms)
-    ga_brain.save_population("population.json")
-    print("Game state saved successfully.")
-
-
-def draw_menu(screen, selected_option):
+def draw_menu(screen):
     """Draw the pause menu."""
     screenW = pygame.display.Info().current_w
     screenH = pygame.display.Info().current_h
     font = pygame.font.Font(None, 36)
-<<<<<<< HEAD
-    options = ["Save Game State", "Exit Game"]
-=======
     options = ["Save Platforms", "Load Level", "Exit Game"]
->>>>>>> 0d78d4860518dcc2353d8f27bf890d541b153067
 
     # Background overlay
     menu_rect = pygame.Surface((screenW, screenH), pygame.SRCALPHA)
@@ -110,25 +86,6 @@ def draw_menu(screen, selected_option):
         screen.blit(text, (screenW // 2 - text.get_width() // 2, screenH // 2 + i * 40 - 20))
 
 
-<<<<<<< HEAD
-class Camera:
-    def __init__(self, width, height):
-        self.camera_rect = pygame.Rect(0, 0, width, height)
-        self.width = width
-        self.height = height
-
-    def apply(self, entity):
-        return entity.rect.move(self.camera_rect.topleft)
-
-    def update(self, target):
-        x = -target.rect.centerx + SCREEN_WIDTH // 2
-        y = -target.rect.centery + SCREEN_HEIGHT // 2
-        x = min(0, x)  # Left boundary
-        y = min(0, y)  # Top boundary
-        x = max(-(self.width - SCREEN_WIDTH), x)  # Right boundary
-        y = max(-(self.height - SCREEN_HEIGHT), y)  # Bottom boundary
-        self.camera_rect = pygame.Rect(x, y, self.width, self.height)
-=======
 def load_platforms_from_file(filename, platforms):
     """Load platforms from a JSON file and add them to the platforms group."""
     with open(filename, "r") as file:
@@ -176,14 +133,15 @@ def draw_text_input(screen, filename_input):
     # Center the prompt and filename on the screen
     screen.blit(prompt_text, (screenW // 2 - prompt_text.get_width() // 2, screenH // 2 - 40))
     screen.blit(filename_text, (screenW // 2 - filename_text.get_width() // 2, screenH // 2))
->>>>>>> 0d78d4860518dcc2353d8f27bf890d541b153067
 
 
+# Convert mouse position to world position considering the camera's offset
 def get_world_position(mouse_pos, camera):
+    # Adjust the mouse position by subtracting the camera's top-left offset
     return (
-        mouse_pos[0] - camera.camera_rect.topleft[0],
-        mouse_pos[1] - camera.camera_rect.topleft[1]
-    )
+            mouse_pos[0] - camera.camera_rect.topleft[0],
+            mouse_pos[1] - camera.camera_rect.topleft[1]
+            )
 
 # Global variable(s)
 if os.path.exists("Levels"):
@@ -191,56 +149,46 @@ if os.path.exists("Levels"):
 else:
     level_files = None
 
-# Main game loop
-running = True
-generation = 0
-is_menu_open = False
-selected_option = 0  # 0 for Save Game State, 1 for Exit Game
+# Initialize GA brain
+ga_brain = GABrain(
+    population_size=10,
+    mutation_rate=0.1,
+    crossover_rate=0.7,
+    sequence_length=100,
+    goal_x=1000  # Adjust based on your level's goal position
+)
 
-# Create a player
-player = Player()
+if __name__ == '__main__':
+    # The many variables start here
 
-<<<<<<< HEAD
-# Create camera
-camera = Camera(2000, 1000)
-=======
     is_menu_open = False
     is_load_menu_open = False
     selected_option = 0  # 0 for Save Platforms, 1 for Load Level, 2 for Exit Game
     selected_level_index = 0
     filename_input = ""
     is_text_input = False
-    # Retrieve list of JSON files in Levels directory
->>>>>>> 0d78d4860518dcc2353d8f27bf890d541b153067
 
-# Create platforms
-platforms = pygame.sprite.Group()
-platform_y = camera.height + 100
-bottom_platform = Platform(0, platform_y, camera.width, 20)
-platforms.add(bottom_platform)
-platforms.add(Platform(0, 100, 10, camera.height))
-platforms.add(Platform(camera.width - 10, 100, 10, camera.height))
+    # Set up display
+    screenInfo = pygame.display.Info()
+    screen_width = screenInfo.current_w
+    screen_height = screenInfo.current_h
 
-# Full-screen state variable
-is_fullscreen = True
+    # screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
+    pygame.display.set_caption("daGame")
 
-while running:
+    # Define gradient colors (top and bottom)
+    color_top = (186, 223, 255)  # Lighter blue (top)
+    color_bottom = (104, 183, 252)  # Darker blue (bottom)
+
+    # Set up clock
     clock = pygame.time.Clock()
-    clock.tick(60)
-    camera.update(player)
-    player.update(platforms)
 
-<<<<<<< HEAD
-    # Event handling
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_F11:
-                is_fullscreen = not is_fullscreen
-=======
     # Create a player
     player = Player()
+
+    # GA Vars
+    generation = 0
 
     # Create camera
     camera = Camera(2000, 1000)
@@ -332,49 +280,38 @@ while running:
                         is_menu_open = False  # Close main menu after loading
             # Toggle full-screen when F11 is pressed
             if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
->>>>>>> 0d78d4860518dcc2353d8f27bf890d541b153067
                 if is_fullscreen:
-                    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
-                else:
+                    # Switch to windowed mode
                     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-            elif event.key == pygame.K_ESCAPE:
-                is_menu_open = not is_menu_open
-            elif event.key == pygame.K_SPACE:
-                player.jump()
+                    is_fullscreen = False
 
-            # Menu navigation and selection
-            if is_menu_open:
-                if event.key == pygame.K_DOWN:
-                    selected_option = (selected_option + 1) % 2
-                elif event.key == pygame.K_UP:
-                    selected_option = (selected_option - 1) % 2
-                elif event.key == pygame.K_RETURN:
-                    if selected_option == 0:
-                        save_game_state()  # Save platforms and GA state
-                    elif selected_option == 1:
-                        running = False
+                else:
+                    # Switch to fullscreen mode
+                    screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
+                    is_fullscreen = True
 
-    # === Genetic Algorithm Logic ===
-    for agent in ga_brain.population:
-        fitness = ga_brain.calculate_fitness(agent)
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    player.jump()
 
-    if generation % 10 == 0:
-        ga_brain.evolve()
-        generation += 1
-    # === End of Genetic Algorithm Logic ===
+            # Left mouse button pressed (start drawing a platform)
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                start_pos = get_world_position(pygame.mouse.get_pos(), camera)
+                draw_start_pos = pygame.mouse.get_pos()
+                is_drawing = True
 
-    # Draw background and sprites
-    draw_gradient(screen, color_top, color_bottom, SCREEN_WIDTH, SCREEN_HEIGHT)
-    for platform in platforms:
-        platform.draw(screen, camera)
-    player.draw(screen, camera)
+            # Left mouse button released (finish drawing the platform)
+            if event.type == pygame.MOUSEBUTTONUP and event.button == 1 and is_drawing:
+                end_pos = get_world_position(pygame.mouse.get_pos(), camera)
 
-    if is_menu_open:
-        draw_menu(screen, selected_option)
+                # Create the platform with adjusted world coordinates
+                platform = create_platform(start_pos, end_pos)
 
-<<<<<<< HEAD
-    pygame.display.flip()
-=======
+                # Add the new platform to the platforms group
+                platforms.add(platform)
+
                 # Reset drawing state
                 is_drawing = False
                 start_pos = None
@@ -395,10 +332,19 @@ while running:
         all_sprites.update(platforms)
         player.update(platforms)
 
+        # === Genetic Algorithm Logic ===
+        for agent in ga_brain.population:
+            agent.update(platforms)
+            agent.draw(screen, camera)
+
+        if generation % 600 == 0:
+            for agent in ga_brain.population:
+                fitness = ga_brain.calculate_fitness(agent)
+            ga_brain.evolve()
+        generation += 1
+        # === End of Genetic Algorithm Logic ===
+
         # Drawing
-        # screen.fill((255, 255, 255))  # Fill the screen with white
-        # pygame.draw.rect(screen, (255, 0, 0), player.rect, 1)  # Red rectangle, thickness of 2
-        # all_sprites.draw(screen)
         for platform in platforms:
             platform.draw(screen, camera)
         player.draw(screen, camera)
@@ -431,6 +377,3 @@ while running:
         pygame.display.flip()
 
     pygame.quit()
->>>>>>> 0d78d4860518dcc2353d8f27bf890d541b153067
-
-pygame.quit()
