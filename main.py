@@ -6,7 +6,7 @@ import json
 import os
 import math
 
-GRID_SIZE = 20
+GRID_SIZE = 40
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 FPS = 30
 

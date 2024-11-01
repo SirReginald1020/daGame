@@ -19,13 +19,13 @@ class Player(pygame.sprite.Sprite):
         self.rect = pygame.Rect(0, 0, 34, 57)
         self.rect.center = (screen_width // 2, screen_height // 2)
         self.vel_y = 0
-        self.speed = 5
+        self.speed = 4.5
         self.jumping = False
         self.flipped = False  # Track whether the player is moving left or right
 
         # Animation timing
         self.animation_timer = 0
-        self.animation_speed = 3.5  # Adjust this for faster/slower animation speed
+        self.animation_speed = 5  # Higher = Slower animation speed
 
     def animate(self):
         # Update frame based on time
@@ -68,7 +68,7 @@ class Player(pygame.sprite.Sprite):
         self.horizontal_collisions(platforms)
 
         # Gravity and vertical movement
-        self.vel_y += 1  # Gravity
+        self.vel_y += 0.35  # Gravity
         self.rect.y += self.vel_y
 
         # Check for vertical collisions
@@ -76,7 +76,7 @@ class Player(pygame.sprite.Sprite):
 
     def jump(self):
         if not self.jumping:
-            self.vel_y = -15
+            self.vel_y = -11
             self.jumping = True
 
     def horizontal_collisions(self, platforms):
