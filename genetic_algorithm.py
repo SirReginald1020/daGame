@@ -1,6 +1,24 @@
 # genetic_algorithm.py
 
 import random
+import pygame
+
+class Agent(pygame.sprite.Sprite):
+    def __init__(self, chromosome, start_x=0, start_y=0):
+        super().__init__()
+        self.chromosome = chromosome
+        self.rect = pygame.Rect(start_x, start_y, 34, 57)  # Define the starting position and size
+
+    def perform_action(self, action):
+        if action == 'move_left':
+            self.rect.x -= 5  # Adjust movement speed as necessary
+        elif action == 'move_right':
+            self.rect.x += 5
+        elif action == 'jump':
+            self.rect.y -= 15  # Example jump; implement gravity as needed
+        elif action == 'idle':
+            pass  # No movement for idle
+
 
 class GABrain:
     def __init__(self, population_size, mutation_rate, crossover_rate, sequence_length, goal_x):
@@ -12,32 +30,44 @@ class GABrain:
         self.population = self.initialize_population()
         
     def initialize_population(self):
-        # Generate a population of random chromosomes (action sequences)
+        # Generate a population of agents with random chromosomes (action sequences)
         population = []
         for _ in range(self.population_size):
             chromosome = [random.choice(['jump', 'move_left', 'move_right', 'idle']) for _ in range(self.sequence_length)]
-            population.append(chromosome)
+            agent = Agent(chromosome)
+            population.append(agent)
         return population
 
     def calculate_fitness(self, agent):
-        # Example fitness: distance traveled towards the goal
+        # Fitness is based on distance traveled towards the goal
         distance_traveled = agent.rect.x
         fitness = distance_traveled / self.goal_x  # Normalize by the goal position
         return fitness
 
     def selection(self):
-        # Tournament selection: pick two random agents and select the one with higher fitness
-        candidates = random.sample(self.population, 2)
-        return max(candidates, key=lambda agent: self.calculate_fitness(agent))
+        # Calculate fitness for all agents and sort by fitness
+        sorted_population = sorted(self.population, key=lambda agent: self.calculate_fitness(agent), reverse=True)
+        
+        # Select from the top half of the population for higher fitness
+        top_half = sorted_population[:len(sorted_population) // 2]
+        
+        # Randomly pick two parents from the top half
+        parent1 = random.choice(top_half)
+        parent2 = random.choice(top_half)
+        return parent1, parent2
 
     def crossover(self, parent1, parent2):
-        # Single-point crossover
+        # Single-point crossover on chromosomes
         if random.random() < self.crossover_rate:
             crossover_point = random.randint(0, self.sequence_length - 1)
-            child1 = parent1[:crossover_point] + parent2[crossover_point:]
-            child2 = parent2[:crossover_point] + parent1[crossover_point:]
+            child1_chromosome = parent1.chromosome[:crossover_point] + parent2.chromosome[crossover_point:]
+            child2_chromosome = parent2.chromosome[:crossover_point] + parent1.chromosome[crossover_point:]
         else:
-            child1, child2 = parent1[:], parent2[:]
+            child1_chromosome, child2_chromosome = parent1.chromosome[:], parent2.chromosome[:]
+        
+        # Create new Agent objects for children
+        child1 = Agent(child1_chromosome)
+        child2 = Agent(child2_chromosome)
         return child1, child2
 
     def mutate(self, chromosome):
@@ -51,9 +81,10 @@ class GABrain:
         # Create a new generation using selection, crossover, and mutation
         new_population = []
         for _ in range(self.population_size // 2):
-            parent1 = self.selection()
-            parent2 = self.selection()
+            parent1, parent2 = self.selection()
             child1, child2 = self.crossover(parent1, parent2)
-            new_population.append(self.mutate(child1))
-            new_population.append(self.mutate(child2))
+            child1.chromosome = self.mutate(child1.chromosome)
+            child2.chromosome = self.mutate(child2.chromosome)
+            new_population.extend([child1, child2])
         self.population = new_population
+
