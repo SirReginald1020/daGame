@@ -2,6 +2,7 @@
 
 import random
 import pygame
+import json
 
 class Agent(pygame.sprite.Sprite):
     def __init__(self, chromosome, start_x=0, start_y=0):
@@ -88,3 +89,15 @@ class GABrain:
             new_population.extend([child1, child2])
         self.population = new_population
 
+    def save_population(self, filename="population.json"):
+        # Save current population to a JSON file
+        population_data = [
+            {
+                "chromosome": agent.chromosome,
+                "position": {"x": agent.rect.x, "y": agent.rect.y}
+            }
+            for agent in self.population
+        ]
+        with open(filename, "w") as file:
+            json.dump(population_data, file, indent=4)
+        print("Population saved successfully to", filename)

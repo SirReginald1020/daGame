@@ -63,8 +63,15 @@ def save_platforms(platforms):
         for platform in platforms
     ]
     with open("platforms.json", "w") as file:
-        json.dump(platform_data, file)
+        json.dump(platform_data, file, indent=4)
     print("Platforms saved successfully.")
+
+
+def save_game_state():
+    """Save both platforms and genetic algorithm state."""
+    save_platforms(platforms)
+    ga_brain.save_population("population.json")
+    print("Game state saved successfully.")
 
 
 def draw_menu(screen, selected_option):
@@ -72,7 +79,7 @@ def draw_menu(screen, selected_option):
     screenW = pygame.display.Info().current_w
     screenH = pygame.display.Info().current_h
     font = pygame.font.Font(None, 36)
-    options = ["Save Platforms", "Exit Game"]
+    options = ["Save Game State", "Exit Game"]
 
     # Background overlay
     menu_rect = pygame.Surface((screenW, screenH), pygame.SRCALPHA)
@@ -116,7 +123,7 @@ def get_world_position(mouse_pos, camera):
 running = True
 generation = 0
 is_menu_open = False
-selected_option = 0  # 0 for Save Platforms, 1 for Exit Game
+selected_option = 0  # 0 for Save Game State, 1 for Exit Game
 
 # Create a player
 player = Player()
@@ -165,7 +172,7 @@ while running:
                     selected_option = (selected_option - 1) % 2
                 elif event.key == pygame.K_RETURN:
                     if selected_option == 0:
-                        save_platforms(platforms)
+                        save_game_state()  # Save platforms and GA state
                     elif selected_option == 1:
                         running = False
 
@@ -190,5 +197,3 @@ while running:
     pygame.display.flip()
 
 pygame.quit()
-
-
