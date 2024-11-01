@@ -2,6 +2,7 @@ import pygame
 from Player import Player
 from Platform import Platform
 import json
+import os
 import math
 
 GRID_SIZE = 20
@@ -48,7 +49,9 @@ def save_platforms(platforms):
         {"x": platform.rect.x, "y": platform.rect.y, "width": platform.rect.width, "height": platform.rect.height}
         for platform in platforms
     ]
-    with open("platforms.json", "w") as file:
+    if not os.path.exists("Levels"):  # Make the levels directory
+        os.mkdir("Levels")
+    with open("Levels/platforms.json", "w") as file:
         json.dump(platform_data, file)
     print("Platforms saved successfully.")
 
@@ -57,7 +60,7 @@ def draw_menu(screen):
     screenW = pygame.display.Info().current_w
     screenH = pygame.display.Info().current_h
     font = pygame.font.Font(None, 36)
-    options = ["Save Platforms", "Exit Game"]
+    options = ["Save Platforms", "Load Level", "Exit Game"]
 
     # Background overlay
     menu_rect = pygame.Surface((screenW, screenH), pygame.SRCALPHA)
@@ -68,6 +71,39 @@ def draw_menu(screen):
     for i, option in enumerate(options):
         color = (255, 255, 255) if i == selected_option else (150, 150, 150)
         text = font.render(option, True, color)
+        screen.blit(text, (screenW // 2 - text.get_width() // 2, screenH // 2 + i * 40 - 20))
+
+
+def load_platforms_from_file(filename, platforms):
+    """Load platforms from a JSON file and add them to the platforms group."""
+    with open(filename, "r") as file:
+        platform_data = json.load(file)
+
+    # Clear existing platforms
+    platforms.empty()
+
+    # Add loaded platforms
+    for data in platform_data:
+        platform = Platform(data["x"], data["y"], data["width"], data["height"])
+        platforms.add(platform)
+    print(f"Loaded platforms from {filename}")
+
+
+def draw_load_menu(screen, level_files, selected_level_index):
+    """Draw the load level submenu."""
+    screenW = pygame.display.Info().current_w
+    screenH = pygame.display.Info().current_h
+    font = pygame.font.Font(None, 36)
+
+    # Background overlay
+    load_menu_rect = pygame.Surface((screenW, screenH), pygame.SRCALPHA)
+    load_menu_rect.fill((0, 0, 0, 180))  # Black transparent overlay
+    screen.blit(load_menu_rect, (0, 0))
+
+    # Draw level file options
+    for i, filename in enumerate(level_files):
+        color = (255, 255, 255) if i == selected_level_index else (150, 150, 150)
+        text = font.render(filename, True, color)
         screen.blit(text, (screenW // 2 - text.get_width() // 2, screenH // 2 + i * 40 - 20))
 
 
@@ -110,7 +146,14 @@ if __name__ == '__main__':
     pygame.init()
 
     is_menu_open = False
-    selected_option = 0  # 0 for Save Platforms, 1 for Exit Game
+    is_load_menu_open = False
+    selected_option = 0  # 0 for Save Platforms, 1 for Load Level, 2 for Exit Game
+    selected_level_index = 0
+    # Retrieve list of JSON files in Levels directory
+    if os.path.exists("Levels"):
+        level_files = [f for f in os.listdir("Levels") if f.endswith(".json")]
+    else:
+        level_files = None
 
     # Set up display
     screenInfo = pygame.display.Info()
@@ -174,17 +217,31 @@ if __name__ == '__main__':
                     is_menu_open = not is_menu_open
 
                 # Handle menu navigation and selection if the menu is open
-                if is_menu_open:
+                if is_menu_open and not is_load_menu_open:
                     if event.key == pygame.K_DOWN:
-                        selected_option = (selected_option + 1) % 2
+                        selected_option = (selected_option + 1) % 3
                     elif event.key == pygame.K_UP:
-                        selected_option = (selected_option - 1) % 2
-                    elif event.key == pygame.K_RETURN:  # Select option
+                        selected_option = (selected_option - 1) % 3
+                    elif event.key == pygame.K_RETURN:
                         if selected_option == 0:  # Save Platforms
                             save_platforms(platforms)
-                            is_menu_open = False  # Close menu after saving
-                        elif selected_option == 1:  # Exit Game
-                            running = False  # Exit game loop
+                            is_menu_open = False
+                        elif selected_option == 1:  # Load Level
+                            is_load_menu_open = True
+                            selected_level_index = 0  # Reset to first level
+                        elif selected_option == 2:  # Exit Game
+                            running = False
+                elif is_menu_open and is_load_menu_open:
+                    if event.key == pygame.K_DOWN:
+                        selected_level_index = (selected_level_index + 1) % len(level_files)
+                    elif event.key == pygame.K_UP:
+                        selected_level_index = (selected_level_index - 1) % len(level_files)
+                    elif event.key == pygame.K_RETURN:
+                        # Load the selected level
+                        selected_file = os.path.join("Levels", level_files[selected_level_index])
+                        load_platforms_from_file(selected_file, platforms)
+                        is_load_menu_open = False  # Close load menu after loading
+                        is_menu_open = False  # Close main menu after loading
             # Toggle full-screen when F11 is pressed
             if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
                 if is_fullscreen:
@@ -266,7 +323,10 @@ if __name__ == '__main__':
             # Draw the platform preview directly on the screen
             pygame.draw.rect(screen, (0, 255, 0), preview_rect, 2)
         if is_menu_open:
-            draw_menu(screen)  # Display the menu
+            if is_load_menu_open:
+                draw_load_menu(screen, level_files, selected_level_index)
+            else:
+                draw_menu(screen)
         pygame.display.flip()
 
     pygame.quit()
