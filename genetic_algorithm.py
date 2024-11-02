@@ -4,38 +4,44 @@ import random
 import pygame
 import json
 
-
 class Agent(pygame.sprite.Sprite):
     def __init__(self, chromosome, start_x=100, start_y=300):
         super().__init__()
         self.chromosome = chromosome
-        self.current_action_index = 0
+        self.current_action_index = 0  # Index to track current action in chromosome
         self.rect = pygame.Rect(start_x, start_y, 34, 57)  # Starting position and size
         self.vel_y = 0
         self.speed = 4.5
         self.jumping = False
 
-    def perform_action(self, action):
-        if action == 'move_left':
-            self.rect.x -= self.speed  # Adjust movement speed as necessary
-        elif action == 'move_right':
-            self.rect.x += self.speed
-        elif action == 'jump':
-            self.rect.y -= 11  # Example jump; implement gravity as needed
-            self.jumping = True
-        elif action == 'idle':
-            pass  # No movement for idle
+    def perform_action(self):
+        # Perform the action from the chromosome based on the current index
+        if self.current_action_index < len(self.chromosome):
+            action = self.chromosome[self.current_action_index]
+            if action == 'move_left':
+                self.rect.x -= self.speed
+            elif action == 'move_right':
+                self.rect.x += self.speed
+            elif action == 'jump' and not self.jumping:  # Ensure only jump if not already jumping
+                self.vel_y = -11  # Jump strength
+                self.jumping = True
+            elif action == 'idle':
+                pass  # No movement for idle
+            # Move to the next action
+            self.current_action_index += 1
+        else:
+            # Reset to start of chromosome if reached end
+            self.current_action_index = 0
 
     def apply_gravity(self):
-        self.vel_y += 0.35  # Gravity
+        # Apply gravity to vertical velocity and update position
+        self.vel_y += 0.35  # Gravity strength
         self.rect.y += self.vel_y
 
     def update(self, platforms):
-        # Perform action and apply gravity
-        self.perform_action()
+        # Perform action, apply gravity, and check for collisions
+        self.perform_action()  # Call without an argument
         self.apply_gravity()
-
-        # Handle collisions
         self.horizontal_collisions(platforms)
         self.vertical_collisions(platforms)
 
@@ -53,16 +59,15 @@ class Agent(pygame.sprite.Sprite):
             if self.vel_y > 0:  # Falling down
                 self.rect.bottom = hits[0].rect.top
                 self.vel_y = 0
-                self.jumping = False
+                self.jumping = False  # Can jump again
             elif self.vel_y < 0:  # Jumping up
                 self.rect.top = hits[0].rect.bottom
                 self.vel_y = 0
 
     def draw(self, screen, camera):
-        # Draw in relation to the camera
+        # Draw the agent on screen adjusted by camera position
         offset_position = camera.apply(self)
         pygame.draw.rect(screen, (255, 0, 0), offset_position)  # Draw agent as a red rectangle
-
 
 class GABrain:
     def __init__(self, population_size, mutation_rate, crossover_rate, sequence_length, goal_x):
@@ -133,7 +138,7 @@ class GABrain:
         self.population = new_population
 
     def save_population(self, filename="population.json"):
-        # Save current population to a JSON file
+        # Save current population to a JSON file, overwriting the file each time
         population_data = [
             {
                 "chromosome": agent.chromosome,
@@ -141,6 +146,10 @@ class GABrain:
             }
             for agent in self.population
         ]
-        with open(filename, "a") as file:
+        with open(filename, "w") as file:  # Use "w" to overwrite the file each time
             json.dump(population_data, file, indent=4)
         print("Population saved successfully to", filename)
+
+
+
+
