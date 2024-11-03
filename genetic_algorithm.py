@@ -1,79 +1,105 @@
 # genetic_algorithm.py
 
 import random
-import math
 import pygame
-import json
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
-
 class Agent(pygame.sprite.Sprite):
     def __init__(self, network, platforms_data, goal_x=3900, start_x=80, start_y=1000):
         super().__init__()
-        self.network = network  # The agent's neural network
-        self.platforms_data = platforms_data  # Static platform data for context
-        self.rect = pygame.Rect(start_x, start_y, 34, 57)  # Starting position and size
+        self.network = network
+        self.platforms_data = platforms_data
+        self.rect = pygame.Rect(start_x, start_y, 34, 57)
         self.vel_y = 0
-        self.air_time = 0  # To penalize air time and discourage unnecessary jumping
+        self.air_time = 0
         self.speed = 4.5
         self.jumping = False
         self.goal_x = goal_x
-        self.totalDistanceTraveled = 0  # Reward them for minimizing this while reaching the goal
+        self.total_distance_traveled = 0
+        self.last_x_position = self.rect.x
+        self.stuck_timer = 0  # To detect if an agent is stationary
 
     def perform_action(self):
-        # Process the inputs to the network (use distances to platforms and goal)
+        # Calculate inputs based on the agent's view of nearby platforms and obstacles
         inputs = self.calculate_inputs()
-        inputs_tensor = torch.tensor(inputs, dtype=torch.float32).unsqueeze(0)  # Single batch
+        inputs_tensor = torch.tensor(inputs, dtype=torch.float32).unsqueeze(0)
 
         # Predict action probabilities
         with torch.no_grad():
             output = self.network(inputs_tensor)
-        action = torch.argmax(output).item()  # Get the action with the highest score
+        action = torch.argmax(output).item()
 
-        # Map neural network output to actions
+        # Action mapping
         if action == 0:  # Move left
             self.rect.x -= self.speed
         elif action == 1:  # Move right
             self.rect.x += self.speed
-        elif action == 2 and not self.jumping:  # Jump
-            self.vel_y = -11  # Jump strength
+        elif action == 2 and not self.jumping:  # Jump only if not already in air
+            self.vel_y = -11
             self.jumping = True
-        if self.jumping:
-            self.air_time += 1  # Increment air_time when off the ground
+            self.stuck_timer = 0  # Reset if a jump is made
+
+        # Check if the agent is stuck (no significant forward progress)
+        if abs(self.rect.x - self.last_x_position) < 5:
+            self.stuck_timer += 1
+        else:
+            self.stuck_timer = 0  # Reset if moving forward
+        self.last_x_position = self.rect.x
+
+        # Force a jump if stuck too long
+        if self.stuck_timer > 60:
+            self.jumping = True
+            self.vel_y = -11
+            self.stuck_timer = 0
 
     def calculate_inputs(self):
-        # Encode the agent's state, platform information, and goal distance
-        closest_platform = self.get_nearest_platform_below()
+        # Build a "world map" by identifying nearby platforms and obstacles
+        nearby_platforms = self.get_nearby_platforms()
+        closest_obstacle = self.get_nearest_obstacle_in_front()
         goal_distance = self.goal_x - self.rect.x
 
-        # Inputs could include (as an example):
-        # [agent x, agent y, closest platform x, closest platform y, distance to goal]
+        # Include information from multiple nearby platforms and the goal distance
         inputs = [
-            self.rect.x / 1000,  # Normalize to smaller range
+            self.rect.x / 1000,  # Normalize the agent's position
             self.rect.y / 1000,
-            closest_platform["x"] / 1000,
-            closest_platform["y"] / 1000,
             goal_distance / 1000
         ]
+
+        # Add the nearest platforms (up to 3) for better spatial awareness
+        for platform in nearby_platforms[:3]:  # Limit to 3 platforms for simplicity
+            inputs.extend([platform["x"] / 1000, platform["y"] / 1000])
+
+        # Pad inputs if fewer platforms are detected
+        while len(inputs) < 9:
+            inputs.extend([0, 0])  # Padding for missing platforms
+
+        # Include obstacle data
+        if closest_obstacle:
+            inputs.extend([closest_obstacle["x"] / 1000, closest_obstacle["y"] / 1000])
+        else:
+            inputs.extend([0, 0])  # Padding if no obstacle in range
+
         return inputs
 
-    def get_nearest_platform_below(self):
-        # Calculate and return the nearest platform below or near the agent's x position
-        platforms_below = [p for p in self.platforms_data if p["x"] <= self.rect.x <= p["x"] + p["width"]]
-        if platforms_below:
-            return min(platforms_below, key=lambda p: abs(p["y"] - self.rect.y))
-        return {"x": 0, "y": 1100}  # Default to a platform at the bottom if none found
+    def get_nearby_platforms(self, range=300):
+        """Get platforms within a specified horizontal range."""
+        return [p for p in self.platforms_data if abs(p["x"] - self.rect.x) < range]
+
+    def get_nearest_obstacle_in_front(self, range=200):
+        """Find the closest obstacle in front within a set distance."""
+        obstacles = [p for p in self.platforms_data if p["x"] > self.rect.x and abs(p["y"] - self.rect.y) < range]
+        if obstacles:
+            return min(obstacles, key=lambda p: p["x"] - self.rect.x)
+        return None
 
     def apply_gravity(self):
-        # Apply gravity to vertical velocity and update position
-        self.vel_y += 0.35  # Gravity strength
+        self.vel_y += 0.35
         self.rect.y += self.vel_y
 
     def update(self, platforms):
-        # Perform action, apply gravity, and check for collisions
-        self.perform_action()  # Call without an argument
+        self.perform_action()
         self.apply_gravity()
         self.horizontal_collisions(platforms)
         self.vertical_collisions(platforms)
@@ -89,29 +115,26 @@ class Agent(pygame.sprite.Sprite):
     def vertical_collisions(self, platforms):
         hits = pygame.sprite.spritecollide(self, platforms, False)
         if hits:
-            if self.vel_y > 0:  # Falling down
+            if self.vel_y > 0:  # Falling
                 self.rect.bottom = hits[0].rect.top
                 self.vel_y = 0
-                self.jumping = False  # Can jump again
-                self.air_time = 0  # Reset air_time when back on the ground
-            elif self.vel_y < 0:  # Jumping up
+                self.jumping = False  # Reset jump
+            elif self.vel_y < 0:  # Jumping
                 self.rect.top = hits[0].rect.bottom
                 self.vel_y = 0
         else:
             if not self.jumping:
                 self.jumping = True
-                self.air_time += 1  # Increment when jumping starts
+                self.air_time += 1
 
     def draw(self, screen, camera):
-        # Draw the agent on screen adjusted by camera position
         offset_position = camera.apply(self)
-        pygame.draw.rect(screen, (255, 0, 0), offset_position)  # Draw agent as a red rectangle
-
+        pygame.draw.rect(screen, (255, 0, 0), offset_position)
 
 class AgentNetwork(nn.Module):
     def __init__(self):
         super(AgentNetwork, self).__init__()
-        self.fc1 = nn.Linear(5, 64)  # Adjust input size based on number of input features
+        self.fc1 = nn.Linear(9, 64)  # Adjust input size based on the number of input features
         self.fc2 = nn.Linear(64, 32)
         self.fc3 = nn.Linear(32, 3)  # Output size 3 for left, right, and jump
 
@@ -119,7 +142,6 @@ class AgentNetwork(nn.Module):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         return self.fc3(x)  # Raw logits (softmax can be applied later for probabilities)
-
 
 class GABrain:
     def __init__(self, population_size, mutation_rate, crossover_rate, goal_x,
@@ -144,9 +166,10 @@ class GABrain:
         return population
 
     def calculate_fitness(self, agent):
-        # Fitness is based on distance to the goal, penalized by total travel distance
+        # Fitness is based on distance to the goal, penalized by total travel distance and stationary behavior
         distance_to_goal = abs(self.goal_x - agent.rect.x)
-        fitness = (1 / (distance_to_goal + 1)) * 10 - 0.01 * agent.totalDistanceTraveled
+        movement_penalty = abs(agent.rect.x - agent.last_x_position)
+        fitness = (1 / (distance_to_goal + 1)) * 10 - 0.01 * agent.total_distance_traveled - 0.05 * movement_penalty
         return fitness
 
     def selection(self):
@@ -181,8 +204,6 @@ class GABrain:
     def evolve(self):
         # Exponential decay: adjust the decay rate as needed
         decay_rate = 0.005
-        # Uncomment out the line below to have gradual mutation rate decay
-        # self.mutation_rate = self.mutation_rate * math.exp(-decay_rate * self.generation)
         self.generation += 1
 
         # Selection and mutation logic remains the same
