@@ -1,4 +1,5 @@
 import pygame
+import torch
 from Player import Player
 from Platform import Platform
 from Camera import Camera
@@ -152,6 +153,20 @@ def draw_text_input(screen, filename_input):
     screen.blit(filename_text, (screenW // 2 - filename_text.get_width() // 2, screenH // 2))
 
 
+def draw_grid(screen, grid_size, camera, world_width, world_height):
+    """Draw a static grid in world space coordinates, aligned with platform positions and using camera apply."""
+
+    # Draw vertical grid lines using camera.apply for correct alignment
+    for x in range(0, world_width, grid_size):
+        start_pos = pygame.Rect(x, 0, 1, world_height)  # Vertical line from top to bottom
+        start_screen_pos = camera.apply(start_pos)
+        pygame.draw.line(screen, (200, 200, 200), start_screen_pos.topleft, start_screen_pos.bottomleft)
+
+    # Draw horizontal grid lines using camera.apply for correct alignment
+    for y in range(0, world_height, grid_size):
+        start_pos = pygame.Rect(0, y, world_width, 1)  # Horizontal line from left to right
+        start_screen_pos = camera.apply(start_pos)
+        pygame.draw.line(screen, (200, 200, 200), start_screen_pos.topleft, start_screen_pos.topright)
 
 
 # Convert mouse position to world position considering the camera's offset
@@ -169,22 +184,20 @@ if os.path.exists("Levels"):
 else:
     level_files = None
 
-
+# Establish level to load
+defaultLevel = "Mario.json"
+defaultLevelPath = "Levels/" + defaultLevel
 # Initialize GA brain
 ga_brain = GABrain(
     population_size=10,
     mutation_rate=0.1,
     crossover_rate=0.7,
-    sequence_length=100,
-    goal_x=1000  # Adjust based on your level's goal position
+    platforms_file=defaultLevelPath,
+    goal_x=3640  # Adjust based on your level's goal position
 )
 
 
 if __name__ == '__main__':
-    # Load a level
-    defaultLevel = "Default.json"
-    defaultLevelPath = "Levels/" + defaultLevel
-
 
     # The many variables start here
     is_menu_open = False
@@ -217,7 +230,7 @@ if __name__ == '__main__':
     generation = 0
 
     # Create camera
-    camera = Camera(2000, 1000)
+    camera = Camera(8000, 1000)
 
     # Create platforms
     platforms = pygame.sprite.Group()
@@ -245,10 +258,12 @@ if __name__ == '__main__':
     is_fullscreen = True
 
     # Main game loop
-    debug = True
+    debug = False
     running = True
+    frames_per_generation = 600  # Divide by FPS to get time in seconds the GA will run
     while running:
-        print(player.rect.x, player.rect.y)
+        if debug:
+            print(player.rect.x, player.rect.y)
         clock.tick(FPS)
         camera.update(player)
         player.update(platforms)
@@ -374,19 +389,16 @@ if __name__ == '__main__':
         # Draw blue gradient background
         draw_gradient(screen, color_top, color_bottom, screen_width, screen_height)
 
-
         # Update all sprites
         all_sprites.update(platforms)
         player.update(platforms)
-
 
         # === Genetic Algorithm Logic ===
         for agent in ga_brain.population:
             agent.update(platforms)
             agent.draw(screen, camera)
 
-
-        if generation % 600 == 0:
+        if generation % frames_per_generation == 0:
             for agent in ga_brain.population:
                 fitness = ga_brain.calculate_fitness(agent)
             ga_brain.evolve()
@@ -398,19 +410,18 @@ if __name__ == '__main__':
         for platform in platforms:
             platform.draw(screen, camera)
         player.draw(screen, camera)
-
+        draw_grid(screen, GRID_SIZE, camera, world_width=camera.width, world_height=1100)
 
         # Draw the platform preview last to avoid layering issues
         if is_drawing:
-            # Get the current mouse position in screen space (no need for world conversion)
-            mouse_pos = pygame.mouse.get_pos()
+            # Translate the mouse position into world coordinates
+            mouse_pos_world = get_world_position(pygame.mouse.get_pos(), camera)
 
+            # Snap to grid in world coordinates
+            snapped_start_pos = snap_to_grid(start_pos, GRID_SIZE)
+            snapped_mouse_pos = snap_to_grid(mouse_pos_world, GRID_SIZE)
 
-            snapped_start_pos = snap_to_grid(draw_start_pos, GRID_SIZE)
-            snapped_mouse_pos = snap_to_grid(mouse_pos, GRID_SIZE)
-
-
-            # Calculate the preview rectangle using the start position in screen space
+            # Calculate the preview rectangle using snapped world coordinates
             preview_rect = pygame.Rect(
                 min(snapped_start_pos[0], snapped_mouse_pos[0]),
                 min(snapped_start_pos[1], snapped_mouse_pos[1]),
@@ -418,9 +429,11 @@ if __name__ == '__main__':
                 abs(snapped_mouse_pos[1] - snapped_start_pos[1]),
             )
 
+            # Convert the preview rectangle to screen coordinates using camera
+            preview_rect_screen = camera.apply(preview_rect)
 
-            # Draw the platform preview directly on the screen
-            pygame.draw.rect(screen, (0, 255, 0), preview_rect, 2)
+            # Draw the preview rectangle on the screen
+            pygame.draw.rect(screen, (0, 255, 0), preview_rect_screen, 2)
         if is_menu_open:
             if is_text_input:
                 draw_text_input(screen, filename_input)  # Show text input prompt

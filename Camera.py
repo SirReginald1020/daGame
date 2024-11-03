@@ -10,8 +10,11 @@ class Camera:
         self.height = height
 
     def apply(self, entity):
-        # Adjust the entity position relative to the camera
-        return entity.rect.move(self.camera_rect.topleft)
+        # If the entity has a 'rect' attribute, use it; otherwise, assume entity is a Rect itself
+        if hasattr(entity, 'rect'):
+            return entity.rect.move(self.camera_rect.topleft)
+        else:
+            return entity.move(self.camera_rect.topleft)
 
     def update(self, target):
         # Center the camera on the player
