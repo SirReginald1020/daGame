@@ -5,7 +5,7 @@ import pygame
 import json
 
 class Agent(pygame.sprite.Sprite):
-    def __init__(self, chromosome, start_x=100, start_y=300):
+    def __init__(self, chromosome, start_x=100, start_y=1000):
         super().__init__()
         self.chromosome = chromosome
         self.current_action_index = 0  # Index to track current action in chromosome
@@ -13,8 +13,10 @@ class Agent(pygame.sprite.Sprite):
         self.vel_y = 0
         self.speed = 4.5
         self.jumping = False
+        self.totalDistanceTraveled = 0  # Reward them for minimizing this while reaching the goal
 
     def perform_action(self):
+        previousX = self.rect.x
         # Perform the action from the chromosome based on the current index
         if self.current_action_index < len(self.chromosome):
             action = self.chromosome[self.current_action_index]
@@ -32,6 +34,8 @@ class Agent(pygame.sprite.Sprite):
         else:
             # Reset to start of chromosome if reached end
             self.current_action_index = 0
+        # Calculate horizontal movement distance and add to total distance
+        self.totalDistanceTraveled += abs(self.rect.x - previousX)
 
     def apply_gravity(self):
         # Apply gravity to vertical velocity and update position
@@ -89,8 +93,10 @@ class GABrain:
 
     def calculate_fitness(self, agent):
         # Fitness is based on distance traveled towards the goal
-        distance_traveled = agent.rect.x
-        fitness = distance_traveled / self.goal_x  # Normalize by the goal position
+        distanceToGoal = self.goal_x - agent.rect.x
+        if distanceToGoal < 0:
+            distanceToGoal = 0
+        fitness = distanceToGoal / (agent.totalDistanceTraveled + 1)
         return fitness
 
     def selection(self):
@@ -150,6 +156,18 @@ class GABrain:
             json.dump(population_data, file, indent=4)
         print("Population saved successfully to", filename)
 
-
-
-
+    def load_population(self, filename="population.json"):
+        try:
+            with open(filename, "r") as file:
+                population_data = json.load(file)
+                loaded_population = []
+                for agent_data in population_data:
+                    chromosome = agent_data["chromosome"]
+                    x = agent_data["position"]["x"]
+                    y = agent_data["position"]["y"]
+                    agent = Agent(chromosome, start_x=x, start_y=y)
+                    loaded_population.append(agent)
+                self.population = loaded_population
+            print("Population loaded successfully from", filename)
+        except FileNotFoundError:
+            print("Error: Population file not found.")
