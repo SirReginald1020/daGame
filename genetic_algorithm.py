@@ -7,8 +7,9 @@ import torch.nn as nn
 import torch.optim as optim
 
 class Agent(pygame.sprite.Sprite):
-    def __init__(self, network, platforms_data, goal_x=3900, start_x=80, start_y=1000):
+    def __init__(self, network, platforms_data, goal_x=7960, start_x=80, start_y=1000):
         super().__init__()
+        self.start_x = start_x
         self.network = network
         self.platforms_data = platforms_data
         self.rect = pygame.Rect(start_x, start_y, 34, 57)
@@ -20,8 +21,11 @@ class Agent(pygame.sprite.Sprite):
         self.total_distance_traveled = 0
         self.last_x_position = self.rect.x
         self.stuck_timer = 0  # To detect if an agent is stationary
+        self.moved_left = 0
 
     def perform_action(self):
+        if self.jumping:
+            self.air_time += 0.1
         # Calculate inputs based on the agent's view of nearby platforms and obstacles
         inputs = self.calculate_inputs()
         inputs_tensor = torch.tensor(inputs, dtype=torch.float32).unsqueeze(0)
@@ -34,7 +38,9 @@ class Agent(pygame.sprite.Sprite):
         # Action mapping
         if action == 0:  # Move left
             self.rect.x -= self.speed
+            self.moved_left = True
         elif action == 1:  # Move right
+            self.moved_left = False
             self.rect.x += self.speed
         elif action == 2 and not self.jumping:  # Jump only if not already in air
             self.vel_y = -11
@@ -125,7 +131,6 @@ class Agent(pygame.sprite.Sprite):
         else:
             if not self.jumping:
                 self.jumping = True
-                self.air_time += 1
 
     def draw(self, screen, camera):
         offset_position = camera.apply(self)
@@ -168,8 +173,25 @@ class GABrain:
     def calculate_fitness(self, agent):
         # Fitness is based on distance to the goal, penalized by total travel distance and stationary behavior
         distance_to_goal = abs(self.goal_x - agent.rect.x)
-        movement_penalty = abs(agent.rect.x - agent.last_x_position)
-        fitness = (1 / (distance_to_goal + 1)) * 10 - 0.01 * agent.total_distance_traveled - 0.05 * movement_penalty
+        progress_reward = float(agent.rect.x - agent.start_x) / 10  # Reward for moving right
+        if agent.rect.x > self.goal_x:
+            goal_reward = 2000  # Give them super meth for winning
+        else:
+            goal_reward = 0
+        tax_on_living = 0.1  # Set them on fire so they run faster
+        # movement_penalty = abs(agent.rect.x - agent.last_x_position)
+        movement_penalty = 5 if agent.moved_left else 0  # Old one above, new one only for when they go the wrong way
+
+        fitness = (
+                (1 / (distance_to_goal + 1)) * 10  # Reward for getting closer to the goal
+                + progress_reward  # Direct reward for moving right
+                - 0.01 * agent.total_distance_traveled  # Penalize total distance (minimize backtracking)
+                - (5 if agent.moved_left else 0)  # Penalize moving left
+                - tax_on_living  # Living cost
+                - movement_penalty
+                - agent.air_time * 0.5  # Minor penalty for jumping (discourage unnecessary jumping)
+                + goal_reward
+        )
         return fitness
 
     def selection(self):

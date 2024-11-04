@@ -218,7 +218,7 @@ ga_brain = GABrain(
     mutation_rate=0.1,
     crossover_rate=0.7,
     platforms_file=defaultLevelPath,
-    goal_x=3640  # Adjust based on your level's goal position
+    goal_x=7960  # Adjust based on your level's goal position
 )
 
 
@@ -235,11 +235,13 @@ if __name__ == '__main__':
     is_population_load_menu_open = False
     population_filename_input = ""
     selected_population_index = 0
+    sortedPopulation = []
 
     # Set up display
     screenInfo = pygame.display.Info()
     screen_width = screenInfo.current_w
     screen_height = screenInfo.current_h
+    agentFont = pygame.font.Font(None, 24)
 
     # screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
@@ -451,6 +453,13 @@ if __name__ == '__main__':
             agent.update(platforms)
             agent.draw(screen, camera)
 
+        # Find the alpha agent (the one with the highest fitness)
+        sorted_population = sorted(
+            [(agent, ga_brain.calculate_fitness(agent)) for agent in ga_brain.population],
+            key=lambda x: x[1],
+            reverse=True
+        )
+
         if generation % frames_per_generation == 0:
             for agent in ga_brain.population:
                 fitness = ga_brain.calculate_fitness(agent)
@@ -498,9 +507,21 @@ if __name__ == '__main__':
                 draw_load_menu(screen, population_files, selected_population_index)
             else:
                 draw_menu(screen)
+
+        # Draw each agent's coordinates
+        text_x = 900
+        text_y = 50
+
+        # Display agent coordinates and fitness
+        for index, (agent, fitness) in enumerate(sorted_population):
+            agent_coords = (agent.rect.x, agent.rect.y)
+            color = (0, 0, 255) if index == 0 else (200, 0, 0)  # Blue for the alpha (highest fitness), red for others
+
+            # Render and display each agent's coordinates and fitness
+            coordinates_text = agentFont.render(f"Agent {index + 1} (x, y): {agent_coords} | Fitness: {fitness:.2f}",
+                                                True, color)
+            screen.blit(coordinates_text, (text_x, text_y))
+            text_y += 15  # Move down for the next agent
         pygame.display.flip()
 
-
     pygame.quit()
-
-
