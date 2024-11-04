@@ -508,8 +508,9 @@ if __name__ == '__main__':
             else:
                 draw_menu(screen)
 
-        # Draw each agent's coordinates
-        text_x = 900
+        # Draw each agent's coordinates, y changes with each agent and gets reset here
+        # This is in screenspace not worldspace.
+        text_x = 15
         text_y = 50
 
         # Display agent coordinates and fitness
@@ -518,7 +519,8 @@ if __name__ == '__main__':
             color = (0, 0, 255) if index == 0 else (200, 0, 0)  # Blue for the alpha (highest fitness), red for others
 
             # Render and display each agent's coordinates and fitness
-            coordinates_text = agentFont.render(f"Agent {index + 1} (x, y): {agent_coords} | Fitness: {fitness:.2f}",
+            coordinates_text = agentFont.render(f"Agent {index + 1} \n Action: {agent.action1}, {agent.action2} \n "
+                                                f"(x, y): {agent_coords} | Fitness: {fitness:.2f}",
                                                 True, color)
             screen.blit(coordinates_text, (text_x, text_y))
             text_y += 15  # Move down for the next agent

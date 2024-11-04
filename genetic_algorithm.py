@@ -2,6 +2,7 @@
 import json
 import random
 import pygame
+import numpy
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -22,10 +23,13 @@ class Agent(pygame.sprite.Sprite):
         self.last_x_position = self.rect.x
         self.stuck_timer = 0  # To detect if an agent is stationary
         self.moved_left = 0
+        self.action1 = 0
+        self.action2 = 0
 
     def perform_action(self):
         if self.jumping:
             self.air_time += 0.1
+
         # Calculate inputs based on the agent's view of nearby platforms and obstacles
         inputs = self.calculate_inputs()
         inputs_tensor = torch.tensor(inputs, dtype=torch.float32).unsqueeze(0)
@@ -33,32 +37,25 @@ class Agent(pygame.sprite.Sprite):
         # Predict action probabilities
         with torch.no_grad():
             output = self.network(inputs_tensor)
-        action = torch.argmax(output).item()
 
-        # Action mapping
-        if action == 0:  # Move left
+        # Split the output for horizontal and jump actions
+        horizontal_action = torch.argmax(output[:, :2]).item()  # Assume output[0:2] is for left/right
+        jump_action = torch.argmax(output[:, 2:]).item()  # Assume output[2:] is for jump
+
+        # Horizontal action
+        if horizontal_action == 0:  # Move left
             self.rect.x -= self.speed
             self.moved_left = True
-        elif action == 1:  # Move right
+        elif horizontal_action == 1:  # Move right
             self.moved_left = False
             self.rect.x += self.speed
-        elif action == 2 and not self.jumping:  # Jump only if not already in air
+        # Jump action
+        if jump_action == 1 and not self.jumping:  # Jump only if not already in air
             self.vel_y = -11
             self.jumping = True
             self.stuck_timer = 0  # Reset if a jump is made
-
-        # Check if the agent is stuck (no significant forward progress)
-        if abs(self.rect.x - self.last_x_position) < 5:
-            self.stuck_timer += 1
-        else:
-            self.stuck_timer = 0  # Reset if moving forward
-        self.last_x_position = self.rect.x
-
-        # Force a jump if stuck too long
-        if self.stuck_timer > 60:
-            self.jumping = True
-            self.vel_y = -11
-            self.stuck_timer = 0
+        self.action1 = horizontal_action
+        self.action2 = jump_action
 
     def calculate_inputs(self):
         # Build a "world map" by identifying nearby platforms and obstacles
@@ -141,7 +138,7 @@ class AgentNetwork(nn.Module):
         super(AgentNetwork, self).__init__()
         self.fc1 = nn.Linear(11, 64)  # Adjust input size based on the number of input features
         self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 3)  # Output size 3 for left, right, and jump
+        self.fc3 = nn.Linear(32, 4)  # Output size 4, 2 for left or right, 2 for jump or don't
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
