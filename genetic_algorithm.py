@@ -1,5 +1,5 @@
 # genetic_algorithm.py
-
+import json
 import random
 import pygame
 import torch
@@ -134,7 +134,7 @@ class Agent(pygame.sprite.Sprite):
 class AgentNetwork(nn.Module):
     def __init__(self):
         super(AgentNetwork, self).__init__()
-        self.fc1 = nn.Linear(9, 64)  # Adjust input size based on the number of input features
+        self.fc1 = nn.Linear(11, 64)  # Adjust input size based on the number of input features
         self.fc2 = nn.Linear(64, 32)
         self.fc3 = nn.Linear(32, 3)  # Output size 3 for left, right, and jump
 

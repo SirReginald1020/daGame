@@ -72,6 +72,25 @@ def save_platforms(platforms, filename):
     print(f"Platforms saved successfully as {filename}.json")
     global level_files
     level_files = [f for f in os.listdir("Levels") if f.endswith(".json")]
+    
+
+def save_population_with_prompt(ga_brain, filename_input):
+    """Save the GA population with a specified filename."""
+    file_path = os.path.join(POPULATIONS_DIR, filename_input + ".json")
+    ga_brain.save_population(file_path)
+    print(f"Population saved successfully as {filename_input}.json")
+
+
+def load_population_files():
+    """Get a list of available population files."""
+    return [f for f in os.listdir(POPULATIONS_DIR) if f.endswith(".json")]
+
+
+def load_population_from_file(ga_brain, filename):
+    """Load the GA population from a specified file."""
+    file_path = os.path.join(POPULATIONS_DIR, filename)
+    ga_brain.load_population(file_path)
+    print(f"Population loaded successfully from {filename}")
 
 
 def draw_menu(screen):
@@ -143,10 +162,8 @@ def draw_text_input(screen, filename_input):
     input_box.fill((0, 0, 0, 180))
     screen.blit(input_box, (0, 0))
 
-
     prompt_text = font.render("Enter level name:", True, (255, 255, 255))
     filename_text = font.render(filename_input, True, (255, 255, 255))
-
 
     # Center the prompt and filename on the screen
     screen.blit(prompt_text, (screenW // 2 - prompt_text.get_width() // 2, screenH // 2 - 40))
@@ -178,10 +195,18 @@ def get_world_position(mouse_pos, camera):
             )
 
 
+POPULATIONS_DIR = "Populations"
+if not os.path.exists(POPULATIONS_DIR):
+    os.mkdir(POPULATIONS_DIR)
+else:
+    PopFiles = load_population_files()
+
+
 # Global variable(s)
 if os.path.exists("Levels"):
     level_files = [f for f in os.listdir("Levels") if f.endswith(".json")]
 else:
+    os.mkdir("Levels")
     level_files = None
 
 # Establish level to load
@@ -206,6 +231,10 @@ if __name__ == '__main__':
     selected_level_index = 0
     filename_input = ""
     is_text_input = False
+    is_population_save_prompt = False
+    is_population_load_menu_open = False
+    population_filename_input = ""
+    selected_population_index = 0
 
     # Set up display
     screenInfo = pygame.display.Info()
@@ -260,7 +289,7 @@ if __name__ == '__main__':
     # Main game loop
     debug = False
     running = True
-    frames_per_generation = 600  # Divide by FPS to get time in seconds the GA will run
+    frames_per_generation = 1800  # Divide by FPS to get time in seconds the GA will run
     while running:
         if debug:
             print(player.rect.x, player.rect.y)
@@ -270,10 +299,8 @@ if __name__ == '__main__':
         # Event handling
         for event in pygame.event.get():
 
-
             if event.type == pygame.QUIT:
                 running = False
-
 
             # Toggle the menu with Escape key
             if event.type == pygame.KEYDOWN:
@@ -282,9 +309,10 @@ if __name__ == '__main__':
                         is_text_input = False  # Exit text input if in text input mode
                     elif is_load_menu_open:
                         is_load_menu_open = False
+                    elif is_population_load_menu_open:
+                        is_population_load_menu_open = False
                     else:
                         is_menu_open = not is_menu_open
-
 
                 # Handle text input for filename
                 elif is_text_input:
@@ -301,6 +329,31 @@ if __name__ == '__main__':
                     else:
                         filename_input += event.unicode  # Append character to filename
 
+                if is_population_save_prompt:
+                    # Handle text input for population filename
+                    if event.key == pygame.K_RETURN:
+                        save_population_with_prompt(ga_brain, population_filename_input)
+                        population_filename_input = ""  # Clear input
+                        is_population_save_prompt = False
+                        is_menu_open = False
+                    elif event.key == pygame.K_BACKSPACE:
+                        population_filename_input = population_filename_input[:-1]  # Remove last character
+                    else:
+                        population_filename_input += event.unicode
+                elif is_population_load_menu_open:
+                    # Navigate population load menu
+                    if event.key == pygame.K_DOWN:
+                        selected_population_index = (selected_population_index + 1) % len(population_files)
+                    elif event.key == pygame.K_UP:
+                        selected_population_index = (selected_population_index - 1) % len(population_files)
+                    elif event.key == pygame.K_RETURN:
+                        # Load the selected population
+                        selected_file = population_files[selected_population_index]
+                        load_population_from_file(ga_brain, selected_file)
+                        is_population_load_menu_open = False
+                        is_menu_open = False
+
+
                 # Handle menu navigation and selection if the menu is open
                 if is_menu_open and not is_load_menu_open:
                     if event.key == pygame.K_DOWN:
@@ -313,10 +366,12 @@ if __name__ == '__main__':
                         elif selected_option == 1:  # Load Level
                             is_load_menu_open = True
                             selected_level_index = 0  # Reset to first level
-                        elif selected_option == 2:  # Save GA Population
-                            ga_brain.save_population("population.json")
+                        if selected_option == 2:  # Save GA Population
+                            is_population_save_prompt = True
                         elif selected_option == 3:  # Load GA Population
-                            ga_brain.load_population("population.json")
+                            population_files = load_population_files()
+                            selected_population_index = 0
+                            is_population_load_menu_open = True
                         elif selected_option == 4:  # Exit Game
                             running = False
                 elif is_menu_open and is_load_menu_open:
@@ -343,13 +398,11 @@ if __name__ == '__main__':
                     screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
                     is_fullscreen = True
 
-
             if event.type == pygame.QUIT:
                 running = False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     player.jump()
-
 
             # Left mouse button pressed (start drawing a platform)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -439,6 +492,10 @@ if __name__ == '__main__':
                 draw_text_input(screen, filename_input)  # Show text input prompt
             elif is_load_menu_open:
                 draw_load_menu(screen, level_files, selected_level_index)
+            elif is_population_save_prompt:
+                draw_text_input(screen, population_filename_input)
+            elif is_population_load_menu_open:
+                draw_load_menu(screen, population_files, selected_population_index)
             else:
                 draw_menu(screen)
         pygame.display.flip()
