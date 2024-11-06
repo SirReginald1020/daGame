@@ -28,3 +28,10 @@ class Camera:
         y = max(-(self.height - SCREEN_HEIGHT), y)  # Bottom boundary
 
         self.camera_rect = pygame.Rect(x, y, self.width, self.height)
+
+    def follow(self, target):
+        """Centers the camera on the target position, keeping it within level boundaries."""
+        self.camera_rect.center = (target.rect.x, target.rect.y)
+
+        # Constrain the camera within level boundaries if needed
+        self.camera_rect.clamp_ip(self.camera_rect)

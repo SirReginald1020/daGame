@@ -263,6 +263,7 @@ if __name__ == '__main__':
     selected_population_index = 0
     sortedPopulation = []
     evoCount = 0
+    camera_target_player = True
 
     # Set up display
     screenInfo = pygame.display.Info()
@@ -323,7 +324,8 @@ if __name__ == '__main__':
         if debug:
             print(player.rect.x, player.rect.y)
         clock.tick(FPS)
-        camera.update(player)
+        cam_target = player if camera_target_player else best_agent
+        camera.update(cam_target)
         player.update(platforms)
         # Event handling
         for event in pygame.event.get():
@@ -342,6 +344,8 @@ if __name__ == '__main__':
                         is_population_load_menu_open = False
                     else:
                         is_menu_open = not is_menu_open
+                if event.key == pygame.K_c and not is_text_input:
+                    camera_target_player = not camera_target_player  # Toggle between player and lead agent
 
                 # Handle text input for filename
                 elif is_text_input:
@@ -499,13 +503,14 @@ if __name__ == '__main__':
             key=lambda x: x[1],
             reverse=True
         )
+        best_agent, best_fitness = sorted_population[0]
 
         if generation % frames_per_generation == 0:
             for agent in ga_brain.population:
                 fitness = ga_brain.calculate_fitness(agent)
             best_agent, best_fitness = sorted_population[0]
             log_best_agent_to_csv("best_agent_per_evo.csv", evoCount, best_fitness,
-                                    (best_agent.rect.x, best_agent.rect.y))
+                                  (best_agent.rect.x, best_agent.rect.y))
             evoCount += 1
             print(evoCount)
             ga_brain.evolve()
