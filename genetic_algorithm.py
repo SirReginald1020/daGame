@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+
 class Agent(pygame.sprite.Sprite):
     def __init__(self, network, platforms_data, color=(255, 0, 0), goal_x=7960, start_x=80, start_y=1000):
         super().__init__()
@@ -26,6 +27,7 @@ class Agent(pygame.sprite.Sprite):
         self.action1 = 0
         self.action2 = 0
         self.color = color
+        self.colorVal = 0
 
     def perform_action(self):
         if self.jumping:
@@ -132,14 +134,23 @@ class Agent(pygame.sprite.Sprite):
             if not self.jumping:
                 self.jumping = True
 
-    def draw(self, screen, camera, index, total_agents):
-        # Adjust height incrementally for each agent based on its index
+    def draw(self, screen, camera, index, total_agents=10):
         offset_position = camera.apply(self)
-        offset_position.y += index * 20  # Increase vertical position by 20 pixels for each agent
-
         # Draw the agent in its unique color
-        pygame.draw.rect(screen, self.color, offset_position)
-
+        colorVal = index * 20
+        if colorVal > 255:
+            colorVal = 255
+        self.color = (255, colorVal, 0)
+        # Draw the agent with an increased height
+        height_increase = index * 5  # Increase height by 5 pixels for each agent
+        agent_rect = pygame.Rect(offset_position.x, offset_position.y, self.rect.width,
+                                 self.rect.height)
+        pygame.draw.rect(screen, self.color, agent_rect)
+        flag_height = 10 + (index * 5)  # Start flag at 10 pixels and increment by 5 for each agent
+        flag_top_y = offset_position.y - flag_height
+        #pygame.draw.line(screen, self.color, (offset_position.x + self.rect.width // 2, offset_position.y),
+                         # (offset_position.x + self.rect.width // 2, flag_top_y), 2)
+        pygame.draw.circle(screen, self.color, (offset_position.x + self.rect.width // 2, flag_top_y), 3)
 class AgentNetwork(nn.Module):
     def __init__(self):
         super(AgentNetwork, self).__init__()

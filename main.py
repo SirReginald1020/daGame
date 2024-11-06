@@ -7,6 +7,10 @@ from genetic_algorithm import GABrain  # Import the GA class
 import json
 import os
 import math
+import csv
+import datetime
+import time
+
 
 
 GRID_SIZE = 40  # For placing platforms
@@ -195,6 +199,28 @@ def get_world_position(mouse_pos, camera):
             )
 
 
+# Function to log the best agent's fitness to a CSV file
+import os
+import csv
+
+
+def log_best_agent_to_csv(filename, generation, best_fitness, agent_position):
+    """Logs the best agent's data (generation, fitness, position) to a CSV file with headers."""
+    # Check if the file already exists or is empty to add a header row
+    file_exists = os.path.isfile(filename)
+    write_header = not file_exists or os.stat(filename).st_size == 0
+
+    with open(filename, mode='a', newline='') as file:
+        writer = csv.writer(file)
+
+        # Write headers if the file is new or empty
+        if write_header:
+            writer.writerow(["Generation", "Best Fitness", "Position X", "Position Y"])
+
+        # Log the data
+        writer.writerow([generation, best_fitness, agent_position[0], agent_position[1]])
+
+
 POPULATIONS_DIR = "Populations"
 if not os.path.exists(POPULATIONS_DIR):
     os.mkdir(POPULATIONS_DIR)
@@ -218,12 +244,12 @@ ga_brain = GABrain(
     mutation_rate=0.1,
     crossover_rate=0.7,
     platforms_file=defaultLevelPath,
-    goal_x=7960  # Adjust based on your level's goal position
+    goal_x=7680  # Adjust based on your level's goal position
 )
 
 
 if __name__ == '__main__':
-
+    start_time = time.time()
     # The many variables start here
     is_menu_open = False
     is_load_menu_open = False
@@ -236,6 +262,7 @@ if __name__ == '__main__':
     population_filename_input = ""
     selected_population_index = 0
     sortedPopulation = []
+    evoCount = 0
 
     # Set up display
     screenInfo = pygame.display.Info()
@@ -291,7 +318,7 @@ if __name__ == '__main__':
     # Main game loop
     debug = False
     running = True
-    frames_per_generation = 1800  # Divide by FPS to get time in seconds the GA will run
+    frames_per_generation = 2400  # Divide by FPS to get time in seconds the GA will run
     while running:
         if debug:
             print(player.rect.x, player.rect.y)
@@ -375,6 +402,19 @@ if __name__ == '__main__':
                             selected_population_index = 0
                             is_population_load_menu_open = True
                         elif selected_option == 4:  # Exit Game
+                            # Log the final time
+                            final_elapsed_time = time.time() - start_time
+                            final_hours = int(final_elapsed_time // 3600)
+                            final_minutes = int((final_elapsed_time % 3600) // 60)
+                            final_seconds = int(final_elapsed_time % 60)
+                            log_entry = (
+                                f"Run Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                                f"Elapsed Time: {final_hours} hours, {final_minutes} minutes, {final_seconds} seconds\n"
+                            )
+                            # Write log entry to file
+                            with open("run_logs.txt", "a") as log_file:
+                                log_file.write(log_entry)
+                            print("Run details logged successfully.")
                             running = False
                 elif is_menu_open and is_load_menu_open:
                     if event.key == pygame.K_DOWN:
@@ -463,6 +503,11 @@ if __name__ == '__main__':
         if generation % frames_per_generation == 0:
             for agent in ga_brain.population:
                 fitness = ga_brain.calculate_fitness(agent)
+            best_agent, best_fitness = sorted_population[0]
+            log_best_agent_to_csv("best_agent_per_evo.csv", evoCount, best_fitness,
+                                    (best_agent.rect.x, best_agent.rect.y))
+            evoCount += 1
+            print(evoCount)
             ga_brain.evolve()
         generation += 1
         # === End of Genetic Algorithm Logic ===
@@ -524,6 +569,16 @@ if __name__ == '__main__':
                                                 True, color)
             screen.blit(coordinates_text, (text_x, text_y))
             text_y += 15  # Move down for the next agent
+        elapsed_time = time.time() - start_time
+
+        # Convert to minutes and seconds format
+        hours = int(elapsed_time // 3600)
+        minutes = int(elapsed_time // 60)
+        seconds = int(elapsed_time % 60)
+
+        # Render the timer text and display it
+        timer_text = agentFont.render(f"Time: {hours:02}:{minutes:02}:{seconds:02}", True, (0, 0, 0))
+        screen.blit(timer_text, (1050, 0))  # Display timer in the top-right corner
         pygame.display.flip()
 
     pygame.quit()
