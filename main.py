@@ -490,8 +490,9 @@ if __name__ == '__main__':
 
         # === Genetic Algorithm Logic ===
         for index, agent in enumerate(ga_brain.population):
-            agent.update(platforms)
-            agent.draw(screen, camera, index, ga_brain.population_size)
+             agent.update_fitness(ga_brain)  # Update fitness and rate of change
+             agent.update(platforms)         # Perform the usual update for movement and collision
+             agent.draw(screen, camera, index, ga_brain.population_size)  # Draw agent with updated fitness info
 
         # Find the alpha agent (the one with the highest fitness)
         sorted_population = sorted(

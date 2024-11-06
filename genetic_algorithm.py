@@ -28,6 +28,14 @@ class Agent(pygame.sprite.Sprite):
         self.action2 = 0
         self.color = color
         self.colorVal = 0
+        self.current_fitness = 0
+        self.previous_fitness = 0
+        self.fitness_change_rate = 0
+
+    def update_fitness(self, ga_brain):
+        self.previous_fitness = self.current_fitness
+        self.current_fitness = ga_brain.calculate_fitness(self)
+        self.fitness_change_rate = self.current_fitness - self.previous_fitness
 
     def perform_action(self):
         if self.jumping:
@@ -151,6 +159,14 @@ class Agent(pygame.sprite.Sprite):
         #pygame.draw.line(screen, self.color, (offset_position.x + self.rect.width // 2, offset_position.y),
                          # (offset_position.x + self.rect.width // 2, flag_top_y), 2)
         pygame.draw.circle(screen, self.color, (offset_position.x + self.rect.width // 2, flag_top_y), 3)
+        # Display the fitness score and rate of change next to the agent
+        offset_position = camera.apply(self)
+        font = pygame.font.Font(None, 24)
+        fitness_text = font.render(f"Fitness: {self.current_fitness:.2f}", True, (255, 255, 255))
+        rate_text = font.render(f"Rate: {self.fitness_change_rate:.2f}", True, (255, 255, 255))
+        screen.blit(fitness_text, (offset_position.x, offset_position.y - 20))
+        screen.blit(rate_text, (offset_position.x, offset_position.y - 40))
+        
 class AgentNetwork(nn.Module):
     def __init__(self):
         super(AgentNetwork, self).__init__()
