@@ -583,7 +583,10 @@ if __name__ == '__main__':
 
         # Render the timer text and display it
         timer_text = agentFont.render(f"Time: {hours:02}:{minutes:02}:{seconds:02}", True, (0, 0, 0))
-        screen.blit(timer_text, (1050, 0))  # Display timer in the top-right corner
+        screen.blit(timer_text, (1050, 15))  # Display timer in the top-right corner
+
+        gen_text = agentFont.render(f"Generation: {evoCount}", True, (0, 0, 0))
+        screen.blit(gen_text, (1050, 30))
         pygame.display.flip()
 
     pygame.quit()
