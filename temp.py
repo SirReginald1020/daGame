@@ -2,13 +2,13 @@
 import json
 import random
 import pygame
-import numpy
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
+
 class Agent(pygame.sprite.Sprite):
-    def __init__(self, network, platforms_data, color=(255, 0, 0), goal_x=7960, start_x=80, start_y=1000):
+    def __init__(self, network, platforms_data, goal_x=7960, start_x=80, start_y=1000):
         super().__init__()
         self.start_x = start_x
         self.network = network
@@ -23,14 +23,10 @@ class Agent(pygame.sprite.Sprite):
         self.last_x_position = self.rect.x
         self.stuck_timer = 0  # To detect if an agent is stationary
         self.moved_left = 0
-        self.action1 = 0
-        self.action2 = 0
-        self.color = color
 
     def perform_action(self):
         if self.jumping:
             self.air_time += 0.1
-
         # Calculate inputs based on the agent's view of nearby platforms and obstacles
         inputs = self.calculate_inputs()
         inputs_tensor = torch.tensor(inputs, dtype=torch.float32).unsqueeze(0)
@@ -38,25 +34,32 @@ class Agent(pygame.sprite.Sprite):
         # Predict action probabilities
         with torch.no_grad():
             output = self.network(inputs_tensor)
+        action = torch.argmax(output).item()
 
-        # Split the output for horizontal and jump actions
-        horizontal_action = torch.argmax(output[:, :2]).item()  # Assume output[0:2] is for left/right
-        jump_action = torch.argmax(output[:, 2:]).item()  # Assume output[2:] is for jump
-
-        # Horizontal action
-        if horizontal_action == 0:  # Move left
+        # Action mapping
+        if action == 0:  # Move left
             self.rect.x -= self.speed
             self.moved_left = True
-        elif horizontal_action == 1:  # Move right
+        elif action == 1:  # Move right
             self.moved_left = False
             self.rect.x += self.speed
-        # Jump action
-        if jump_action == 1 and not self.jumping:  # Jump only if not already in air
+        elif action == 2 and not self.jumping:  # Jump only if not already in air
             self.vel_y = -11
             self.jumping = True
             self.stuck_timer = 0  # Reset if a jump is made
-        self.action1 = horizontal_action
-        self.action2 = jump_action
+
+        # Check if the agent is stuck (no significant forward progress)
+        if abs(self.rect.x - self.last_x_position) < 5:
+            self.stuck_timer += 1
+        else:
+            self.stuck_timer = 0  # Reset if moving forward
+        self.last_x_position = self.rect.x
+
+        # Force a jump if stuck too long
+        if self.stuck_timer > 60:
+            self.jumping = True
+            self.vel_y = -11
+            self.stuck_timer = 0
 
     def calculate_inputs(self):
         # Build a "world map" by identifying nearby platforms and obstacles
@@ -64,22 +67,20 @@ class Agent(pygame.sprite.Sprite):
         closest_obstacle = self.get_nearest_obstacle_in_front()
         goal_distance = self.goal_x - self.rect.x
 
-        # Include information from the agent's position, goal distance, and up to three platform edges
+        # Include information from multiple nearby platforms and the goal distance
         inputs = [
             self.rect.x / 1000,  # Normalize the agent's position
             self.rect.y / 1000,
             goal_distance / 1000
         ]
 
-        # Add edges of the nearest platforms for better spatial awareness
+        # Add the nearest platforms (up to 3) for better spatial awareness
         for platform in nearby_platforms[:3]:  # Limit to 3 platforms for simplicity
-            left_edge = platform["x"] / 1000
-            right_edge = (platform["x"] + platform["width"]) / 1000
-            inputs.extend([left_edge, right_edge, platform["y"] / 1000])
+            inputs.extend([platform["x"] / 1000, platform["y"] / 1000])
 
         # Pad inputs if fewer platforms are detected
-        while len(inputs) < 12:  # Adjust padding to match expected input length
-            inputs.extend([0, 0, 0])  # Padding for missing platforms (left edge, right edge, y position)
+        while len(inputs) < 9:
+            inputs.extend([0, 0])  # Padding for missing platforms
 
         # Include obstacle data
         if closest_obstacle:
@@ -132,33 +133,22 @@ class Agent(pygame.sprite.Sprite):
             if not self.jumping:
                 self.jumping = True
 
-    def draw(self, screen, camera, index, total_agents):
-        # Adjust height incrementally for each agent based on its index
+    def draw(self, screen, camera):
         offset_position = camera.apply(self)
-        offset_position.y += index * 20  # Increase vertical position by 20 pixels for each agent
+        pygame.draw.rect(screen, (255, 0, 0), offset_position)
 
-        # Draw the agent in its unique color
-        pygame.draw.rect(screen, self.color, offset_position)
 
 class AgentNetwork(nn.Module):
     def __init__(self):
         super(AgentNetwork, self).__init__()
-        self.fc1 = nn.Linear(14, 64)  # Adjust input size based on the number of input features
+        self.fc1 = nn.Linear(11, 64)  # Adjust input size based on the number of input features
         self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 4)  # Output size 4, 2 for left or right, 2 for jump or don't
+        self.fc3 = nn.Linear(32, 3)  # Output size 3 for left, right, and jump
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         return self.fc3(x)  # Raw logits (softmax can be applied later for probabilities)
-
-
-# GABrain helper function(s)
-def generate_rainbow_color(index, total_agents):
-    """Generate a color based on the index to create a rainbow effect."""
-    hue = int((index / total_agents) * 255)  # Set hue based on agent index
-    color = (hue, 100, 100)  # Full saturation and brightness for vibrant colors
-    return color
 
 
 class GABrain:
@@ -173,15 +163,13 @@ class GABrain:
         self.goal_x = goal_x
         self.generation = 0
         self.population = self.initialize_population()
-        
+
     def initialize_population(self):
         # Initialize a population of agents with random neural networks
         population = []
         for _ in range(self.population_size):
             network = AgentNetwork()  # Each agent gets a unique network
-            color = generate_rainbow_color(_, self.population_size)
-            print(color)
-            agent = Agent(network=network, platforms_data=self.platforms_data, goal_x=self.goal_x, color=color)
+            agent = Agent(network=network, platforms_data=self.platforms_data, goal_x=self.goal_x)
             population.append(agent)
         return population
 
@@ -212,10 +200,10 @@ class GABrain:
     def selection(self):
         # Calculate fitness for all agents and sort by fitness
         sorted_population = sorted(self.population, key=lambda agent: self.calculate_fitness(agent), reverse=True)
-        
+
         # Select from the top half of the population for higher fitness
         top_half = sorted_population[:len(sorted_population) // 2]
-        
+
         # Randomly pick two parents from the top half
         parent1 = random.choice(top_half)
         parent2 = random.choice(top_half)

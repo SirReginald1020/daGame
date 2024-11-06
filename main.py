@@ -449,9 +449,9 @@ if __name__ == '__main__':
         player.update(platforms)
 
         # === Genetic Algorithm Logic ===
-        for agent in ga_brain.population:
+        for index, agent in enumerate(ga_brain.population):
             agent.update(platforms)
-            agent.draw(screen, camera)
+            agent.draw(screen, camera, index, ga_brain.population_size)
 
         # Find the alpha agent (the one with the highest fitness)
         sorted_population = sorted(
