@@ -264,6 +264,7 @@ if __name__ == '__main__':
     sortedPopulation = []
     evoCount = 0
     camera_target_player = True
+    writeLogs = False
 
     # Set up display
     screenInfo = pygame.display.Info()
@@ -509,8 +510,9 @@ if __name__ == '__main__':
             for agent in ga_brain.population:
                 fitness = ga_brain.calculate_fitness(agent)
             best_agent, best_fitness = sorted_population[0]
-            log_best_agent_to_csv("best_agent_per_evo.csv", evoCount, best_fitness,
-                                  (best_agent.rect.x, best_agent.rect.y))
+            if writeLogs:
+                log_best_agent_to_csv("best_agent_per_evo.csv", evoCount, best_fitness,
+                                      (best_agent.rect.x, best_agent.rect.y))
             evoCount += 1
             print(evoCount)
             ga_brain.evolve()
